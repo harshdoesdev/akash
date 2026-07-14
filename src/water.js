@@ -65,10 +65,15 @@ const fragmentShader = /* glsl */ `
     glint *= 1.0 - smoothstep(60.0, 220.0, vFogDepth);
     col += vec3(0.8, 0.85, 0.8) * glint;
 
-    // Foam: a thin rim hugging the shoreline, gently wobbling.
+    // The washing shoreline: the waterline BREATHES — a foam edge slides up
+    // the sand and retreats — and a fainter trailing line chases it back out.
     float wob = sin(vWorld.x * 0.6 + uTime * 1.1) * 0.1 + sin(vWorld.z * 0.83 - uTime * 0.8) * 0.1;
-    float foam = 1.0 - smoothstep(0.02, 0.30, depth + wob * 0.5);
-    col = mix(col, vec3(0.93, 0.97, 0.94), foam * 0.85);
+    float breathe = sin(uTime * 0.75 + wob * 5.0);
+    float shoreline = 0.26 + breathe * 0.13;
+    float foam = 1.0 - smoothstep(shoreline * 0.35, shoreline, depth + wob * 0.3);
+    float lag = 0.6 + sin(uTime * 0.75 - 1.4 + wob * 5.0) * 0.16;
+    foam = max(foam, (1.0 - smoothstep(0.03, 0.16, abs(depth - lag))) * 0.35);
+    col = mix(col, vec3(0.94, 0.97, 0.95), foam * 0.9);
 
     // Prop wash: ripple rings under the drone. When moving, the pattern
     // trails behind and stretches along the flight path — a wake, not a ring.
@@ -92,8 +97,12 @@ const fragmentShader = /* glsl */ `
       col += vec3(0.08, 0.10, 0.10) * uWash * smoothstep(2.0, 0.2, dw); // churned center
     }
 
+    // Soft dissolve at zero depth — the fix for the hard cut-out edge where
+    // the water plane slices the terrain mesh.
+    float alpha = smoothstep(0.0, 0.2, depth + wob * 0.12);
+
     float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
+    gl_FragColor = vec4(mix(col, uFogColor, fog), alpha);
     #include <colorspace_fragment>
   }
 `;
@@ -111,7 +120,7 @@ export function createWater(scene, heightTexture, fog) {
   };
   const mesh = new THREE.Mesh(
     new THREE.CircleGeometry(TERRAIN_SIZE / 2, 48),
-    new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms })
+    new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms, transparent: true })
   );
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = WATER_LEVEL;

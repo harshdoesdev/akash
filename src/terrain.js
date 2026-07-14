@@ -7,7 +7,7 @@ export const TERRAIN_SIZE = 2000;
 export const WORLD_RADIUS = 800; // soft gameplay boundary; mist beyond
 export const WATER_LEVEL = -4.5; // lakes appear wherever terrain dips below
 const SEGMENTS = 320;
-const HEIGHT_TEX_SIZE = 256;
+const HEIGHT_TEX_SIZE = 512; // fine enough for foam to track the true shoreline
 const COLOR_TEX_SIZE = 768;
 
 // Rolling meadow hills. Flattened near the origin so the spawn pad /
