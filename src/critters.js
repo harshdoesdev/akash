@@ -17,6 +17,8 @@ function toonGradient() {
 const RABBIT_COUNT = 14;
 const SQUIRREL_COUNT = 8;
 const FLOCKS = 3;
+const SHEEP_HERDS = 2;
+const DEER_GROUPS = 2;
 
 export function createCritters(scene, heightAt, colliders, worldSeed) {
   const rand = makeRand(worldSeed ^ 0x0c211e5);
@@ -125,6 +127,154 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     });
   }
 
+  // ---------- Sheep ----------
+  const woolMat = toon(0xede6d6);
+  const sheepDark = toon(0x56493d);
+  const sheep = [];
+
+  function buildSheep() {
+    const g = new THREE.Group();
+    const wool = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), woolMat);
+    wool.scale.set(1, 0.9, 1.3);
+    wool.position.y = 0.52;
+    wool.castShadow = true;
+    g.add(wool);
+    // Head on a neck pivot so it can graze.
+    const headPivot = new THREE.Group();
+    headPivot.position.set(0, 0.62, 0.4);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), sheepDark);
+    head.scale.set(0.8, 0.9, 1.1);
+    head.position.set(0, 0, 0.12);
+    headPivot.add(head);
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.04, 0.06), sheepDark);
+      ear.position.set(s * 0.12, 0.05, 0.1);
+      headPivot.add(ear);
+    }
+    g.add(headPivot);
+    const legs = [];
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.36, 6), sheepDark);
+      leg.position.set(sx * 0.16, 0.18, sz * 0.28);
+      g.add(leg);
+      legs.push(leg);
+    }
+    return { g, headPivot, legs };
+  }
+
+  for (let hIdx = 0; hIdx < SHEEP_HERDS; hIdx++) {
+    let ax, az;
+    let tries = 0;
+    do {
+      ax = (rand() - 0.5) * 1000;
+      az = (rand() - 0.5) * 1000;
+    } while (!groundOk(ax, az) && ++tries < 30);
+    if (tries >= 30) continue;
+    const count = 4 + Math.floor(rand() * 3);
+    for (let i = 0; i < count; i++) {
+      const { g, headPivot, legs } = buildSheep();
+      g.scale.setScalar(1.2);
+      const x = ax + (rand() - 0.5) * 16;
+      const z = az + (rand() - 0.5) * 16;
+      if (!groundOk(x, z)) continue;
+      g.position.set(x, heightAt(x, z), z);
+      g.rotation.y = rand() * Math.PI * 2;
+      scene.add(g);
+      sheep.push({
+        g, headPivot, legs,
+        anchor: { x: ax, z: az },
+        mode: 'graze',
+        timer: rand() * 4,
+        heading: rand() * Math.PI * 2,
+        legPhase: rand() * 10,
+      });
+    }
+  }
+
+  // ---------- Deer ----------
+  const fawnMat = toon(0xb08256);
+  const fawnLeg = toon(0x97714d);
+  const antlerMat = toon(0x6e5340);
+  const deer = [];
+
+  function buildDeer(buck) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), fawnMat);
+    body.scale.set(0.85, 0.9, 1.8);
+    body.position.y = 0.88;
+    body.castShadow = true;
+    g.add(body);
+    // Neck pivot at the shoulders: down = graze, up = alert.
+    const neckPivot = new THREE.Group();
+    neckPivot.position.set(0, 1.0, 0.46);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 7), fawnMat);
+    neck.position.set(0, 0.18, 0.1);
+    neck.rotation.x = 0.45;
+    neckPivot.add(neck);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), fawnMat);
+    head.scale.set(0.8, 0.85, 1.3);
+    head.position.set(0, 0.38, 0.28);
+    neckPivot.add(head);
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.11, 0.03), fawnMat);
+      ear.position.set(s * 0.1, 0.5, 0.2);
+      ear.rotation.z = s * 0.5;
+      neckPivot.add(ear);
+      if (buck) {
+        const antler = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.02, 0.3, 5), antlerMat);
+        antler.position.set(s * 0.07, 0.62, 0.18);
+        antler.rotation.z = s * 0.55;
+        neckPivot.add(antler);
+        const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.014, 0.16, 5), antlerMat);
+        tine.position.set(s * 0.16, 0.7, 0.2);
+        tine.rotation.z = s * 1.15;
+        neckPivot.add(tine);
+      }
+    }
+    g.add(neckPivot);
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), whiteMat);
+    tail.position.set(0, 0.94, -0.56);
+    g.add(tail);
+    const legs = [];
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.026, 0.75, 6), fawnLeg);
+      leg.position.set(sx * 0.15, 0.38, sz * 0.32);
+      g.add(leg);
+      legs.push(leg);
+    }
+    return { g, neckPivot, legs };
+  }
+
+  for (let dIdx = 0; dIdx < DEER_GROUPS; dIdx++) {
+    let ax, az;
+    let tries = 0;
+    do {
+      ax = (rand() - 0.5) * 1100;
+      az = (rand() - 0.5) * 1100;
+    } while (!groundOk(ax, az) && ++tries < 30);
+    if (tries >= 30) continue;
+    const count = 2 + Math.floor(rand() * 2);
+    for (let i = 0; i < count; i++) {
+      const { g, neckPivot, legs } = buildDeer(i === 0); // one buck per group
+      g.scale.setScalar(1.15);
+      const x = ax + (rand() - 0.5) * 14;
+      const z = az + (rand() - 0.5) * 14;
+      if (!groundOk(x, z)) continue;
+      g.position.set(x, heightAt(x, z), z);
+      g.rotation.y = rand() * Math.PI * 2;
+      scene.add(g);
+      deer.push({
+        g, neckPivot, legs,
+        anchor: { x: ax, z: az },
+        mode: 'graze',
+        timer: rand() * 4,
+        heading: rand() * Math.PI * 2,
+        legPhase: rand() * 10,
+        phase: 0,
+      });
+    }
+  }
+
   // ---------- Bird flocks ----------
   const birdMat = toon(0x3d434b);
   const flocks = [];
@@ -183,8 +333,14 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     c.g.rotation.y = c.heading;
   }
 
+  const legSwing = (legs, phase, amp) => {
+    // Diagonal pairs swing opposite — a simple trot.
+    legs[0].rotation.x = legs[3].rotation.x = Math.sin(phase) * amp;
+    legs[1].rotation.x = legs[2].rotation.x = -Math.sin(phase) * amp;
+  };
+
   return {
-    debug: { rabbits, squirrels, flocks },
+    debug: { rabbits, squirrels, flocks, sheep, deer },
     update(dt, time, dronePos, droneAgl) {
       const buzzing = droneAgl < 14;
 
@@ -261,6 +417,100 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
             s.mode = 'pause';
             s.timer = 0.6 + rand() * 2;
             s.g.position.y = heightAt(s.g.position.x, s.g.position.z);
+          }
+        }
+      }
+
+      for (const s of sheep) {
+        const dist = Math.hypot(dronePos.x - s.g.position.x, dronePos.z - s.g.position.z);
+        if (buzzing && dist < 11 && s.mode !== 'flee') s.mode = 'flee';
+        s.timer -= dt;
+
+        if (s.mode === 'graze') {
+          s.headPivot.rotation.x = Math.min(0.95, s.headPivot.rotation.x + dt * 2);
+          if (s.timer <= 0) {
+            s.mode = rand() < 0.6 ? 'look' : 'amble';
+            s.timer = s.mode === 'look' ? 1.5 + rand() * 2 : 2 + rand() * 3;
+            s.heading = Math.atan2(
+              s.anchor.x + (rand() - 0.5) * 20 - s.g.position.x,
+              s.anchor.z + (rand() - 0.5) * 20 - s.g.position.z
+            );
+          }
+        } else if (s.mode === 'look') {
+          s.headPivot.rotation.x = Math.max(0, s.headPivot.rotation.x - dt * 3);
+          if (s.timer <= 0) { s.mode = 'graze'; s.timer = 2 + rand() * 5; }
+        } else {
+          const fleeing = s.mode === 'flee';
+          if (fleeing) {
+            s.heading = Math.atan2(s.g.position.x - dronePos.x, s.g.position.z - dronePos.z);
+            s.headPivot.rotation.x = 0;
+          } else {
+            s.headPivot.rotation.x = Math.max(0, s.headPivot.rotation.x - dt * 3);
+          }
+          const speed = fleeing ? 3.6 : 1.0;
+          s.legPhase += dt * speed * 5;
+          legSwing(s.legs, s.legPhase, 0.45);
+          stepGround(s, speed, dt);
+          s.g.position.y = heightAt(s.g.position.x, s.g.position.z);
+          if (fleeing) {
+            if (dist > 26) { s.mode = 'graze'; s.timer = 2 + rand() * 3; legSwing(s.legs, 0, 0); }
+          } else if (s.timer <= 0) {
+            s.mode = 'graze';
+            s.timer = 3 + rand() * 5;
+            legSwing(s.legs, 0, 0);
+          }
+        }
+      }
+
+      for (const d of deer) {
+        const dist = Math.hypot(dronePos.x - d.g.position.x, dronePos.z - d.g.position.z);
+        if (buzzing && dist < 13 && d.mode !== 'flee') { d.mode = 'flee'; d.phase = 0; }
+        else if (buzzing && dist < 30 && d.mode !== 'flee' && d.mode !== 'alert') {
+          d.mode = 'alert';
+          d.timer = 0.5;
+        }
+        d.timer -= dt;
+
+        if (d.mode === 'graze') {
+          d.neckPivot.rotation.x = Math.min(1.1, d.neckPivot.rotation.x + dt * 2.5);
+          if (d.timer <= 0) {
+            d.mode = 'walk';
+            d.timer = 2 + rand() * 3;
+            d.heading = Math.atan2(
+              d.anchor.x + (rand() - 0.5) * 30 - d.g.position.x,
+              d.anchor.z + (rand() - 0.5) * 30 - d.g.position.z
+            );
+          }
+        } else if (d.mode === 'alert') {
+          // Freeze, head snapped up, facing the threat.
+          d.neckPivot.rotation.x = Math.max(0.05, d.neckPivot.rotation.x - dt * 6);
+          d.g.rotation.y = Math.atan2(dronePos.x - d.g.position.x, dronePos.z - d.g.position.z);
+          if (!buzzing || dist > 34) { d.mode = 'graze'; d.timer = 1 + rand() * 3; }
+        } else if (d.mode === 'walk') {
+          d.neckPivot.rotation.x = Math.max(0.15, d.neckPivot.rotation.x - dt * 2);
+          d.legPhase += dt * 4.5;
+          legSwing(d.legs, d.legPhase, 0.4);
+          stepGround(d, 1.3, dt);
+          d.g.position.y = heightAt(d.g.position.x, d.g.position.z);
+          if (d.timer <= 0) { d.mode = 'graze'; d.timer = 3 + rand() * 5; legSwing(d.legs, 0, 0); }
+        } else {
+          // Flee: long graceful bounds.
+          d.heading = Math.atan2(d.g.position.x - dronePos.x, d.g.position.z - dronePos.z);
+          d.neckPivot.rotation.x = -0.1;
+          d.phase += dt / 0.5; // bound duration
+          d.legPhase += dt * 9;
+          legSwing(d.legs, d.legPhase, 0.7);
+          stepGround(d, 6.5, dt);
+          const arc = Math.abs(Math.sin(d.phase * Math.PI));
+          d.g.position.y = heightAt(d.g.position.x, d.g.position.z) + arc * 0.55;
+          if (d.phase >= 1) {
+            d.phase = 0;
+            if (dist > 38) {
+              d.mode = 'graze';
+              d.timer = 2 + rand() * 3;
+              d.g.position.y = heightAt(d.g.position.x, d.g.position.z);
+              legSwing(d.legs, 0, 0);
+            }
           }
         }
       }
