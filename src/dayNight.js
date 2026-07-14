@@ -66,7 +66,7 @@ const cur = K({
 
 export function createDayNight(refs) {
   // refs: {fog, sun, hemi, skyUniforms, cloudMat, ridges, skirtMat, terrainMat}
-  let tod = 0; // midnight — night is the default for now
+  let tod = 0.4; // mid-morning — day is the default
   let fast = false;
   window.addEventListener('keydown', (e) => { if (e.code === 'KeyN') fast = true; });
   window.addEventListener('keyup', (e) => { if (e.code === 'KeyN') fast = false; });
