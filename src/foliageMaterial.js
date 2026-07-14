@@ -63,12 +63,14 @@ const fragmentShader = /* glsl */ `
     float ndl = dot(n, uSunDir) * 0.5 + 0.5;
     // Brush wobble: two noise octaves shove the band thresholds around.
     float w = vnoise(vWorld * 0.85) * 0.65 + vnoise(vWorld * 2.3) * 0.35;
-    float t = clamp(ndl + (w - 0.5) * 0.42, 0.0, 1.0);
+    float t = clamp(ndl + (w - 0.5) * 0.34, 0.0, 1.0);
 
+    // Matte paint: soft-edged bands, and the glow is a sparse warm accent,
+    // not a specular hotspot wrapping every puff top.
     vec3 col = uShadow;
-    col = mix(col, uMid, smoothstep(0.40, 0.46, t));
-    col = mix(col, uLight, smoothstep(0.68, 0.74, t));
-    col = mix(col, uGlow, smoothstep(0.895, 0.925, t)); // sunlit leaf dabs
+    col = mix(col, uMid, smoothstep(0.38, 0.48, t));
+    col = mix(col, uLight, smoothstep(0.66, 0.78, t));
+    col = mix(col, uGlow, smoothstep(0.93, 0.965, t) * 0.5);
     col *= vColor; // canopy-depth shading baked per puff
 
     float fog = smoothstep(uFogNear, uFogFar, vFogDepth);

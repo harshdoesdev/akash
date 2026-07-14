@@ -116,7 +116,11 @@ export function buildWorld(scene, heightAt, worldSeed) {
       if ((x - sx) * (x - sx) + (z - sz) * (z - sz) < 49) return;
     }
     treeSpots.push([x, z]);
-    const h = forcedH || 9 + rand() * 10;
+    // Two archetypes: wide dome oaks and taller, narrower poplar-like trees.
+    // No runts — minimum height is a real tree.
+    const tall = !forcedH && rand() < 0.3;
+    const h = forcedH || (tall ? 16 + rand() * 10 : 12 + rand() * 8);
+    const spread = tall ? 0.7 : 1; // tall trees hold their canopy tight
     const blossom = !forcedH && rand() < 0.07;
     const mats = blossom ? blossomMats : greenMats;
     const matA = mats[Math.floor(rand() * mats.length)];
@@ -176,7 +180,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
 
     // Trunk: leans a little, tapers, splits high (fly under the canopy).
     const trunkDir = new THREE.Vector3((rand() - 0.5) * 0.2, 1, (rand() - 0.5) * 0.2).normalize();
-    const trunkLen = h * 0.42;
+    const trunkLen = h * (tall ? 0.52 : 0.42);
     const top = trunkDir.clone().multiplyScalar(trunkLen);
     limb(new THREE.Vector3(0, 0, 0), top, h * 0.038, h * 0.022);
 
@@ -188,7 +192,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
     for (let i = 0; i < mainCount; i++) {
       const hf = i / Math.max(1, mainCount - 1); // 0 = lowest, 1 = topmost
       const az = az0 + i * GOLDEN + (rand() - 0.5) * 0.6;
-      const tilt = 1.05 - hf * 0.55 + (rand() - 0.5) * 0.22;
+      const tilt = (1.05 - hf * 0.55 + (rand() - 0.5) * 0.22) * (tall ? 0.6 : 1);
       const dir = new THREE.Vector3(
         Math.sin(tilt) * Math.cos(az),
         Math.cos(tilt),
@@ -196,11 +200,11 @@ export function buildWorld(scene, heightAt, worldSeed) {
       ).addScaledVector(trunkDir, 0.25).normalize();
 
       const start = trunkDir.clone().multiplyScalar(trunkLen * (0.45 + hf * 0.5 + rand() * 0.06));
-      const len = h * (0.26 - hf * 0.09) * (0.85 + rand() * 0.3);
+      const len = h * (0.26 - hf * 0.09) * (0.85 + rand() * 0.3) * spread;
       const end = start.clone().addScaledVector(dir, len);
       limb(start, end, h * 0.016, h * 0.008);
       // Pull tip clusters toward the canopy axis so lobes mound into a dome.
-      cluster(end.clone().addScaledVector(dir, h * 0.03).lerp(top, 0.15), h * (0.17 + rand() * 0.06), true);
+      cluster(end.clone().addScaledVector(dir, h * 0.03).lerp(top, 0.15), h * (0.17 + rand() * 0.06) * spread, true);
 
       const twigs = 1 + Math.floor(rand() * 2);
       for (let t = 0; t < twigs; t++) {
@@ -210,13 +214,15 @@ export function buildWorld(scene, heightAt, worldSeed) {
         const tstart = start.clone().addScaledVector(dir, len * (0.45 + rand() * 0.35));
         const tend = tstart.clone().addScaledVector(tdir, len * (0.45 + rand() * 0.25));
         limb(tstart, tend, h * 0.007, h * 0.004);
-        cluster(tend.clone().addScaledVector(tdir, h * 0.02), h * (0.10 + rand() * 0.04), false);
+        cluster(tend.clone().addScaledVector(tdir, h * 0.02), h * (0.10 + rand() * 0.04) * spread, false);
       }
     }
     // Leader cluster crowning the trunk, plus an interior fill mass so the
     // canopy reads as one dome with lobes, not satellite pompoms.
-    cluster(top.clone().add(new THREE.Vector3(0, h * 0.07, 0)), h * (0.18 + rand() * 0.05), true);
-    cluster(top.clone().add(new THREE.Vector3(0, h * 0.16, 0)), h * (0.2 + rand() * 0.05), true);
+    cluster(top.clone().add(new THREE.Vector3(0, h * 0.07, 0)), h * (0.18 + rand() * 0.05) * spread, true);
+    cluster(top.clone().add(new THREE.Vector3(0, h * 0.16, 0)), h * (0.2 + rand() * 0.05) * spread, true);
+    // Tall trees stack one more cluster up the leader for a pointed crown.
+    if (tall) cluster(top.clone().add(new THREE.Vector3(0, h * 0.28, 0)), h * 0.15, true);
 
     // Two detail levels sharing the wood geometry; puff detail only near by.
     const woodGeo = mergeGeometries(limbParts);
@@ -247,7 +253,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
     scene.add(tree);
 
     // Main trunk collider: vertical cylinder from the ground to the fork.
-    colliders.push({ x, z, r: Math.max(0.28, h * 0.042), top: y + h * 0.46 });
+    colliders.push({ x, z, r: Math.max(0.28, h * 0.042), top: y + trunkLen * 1.08 });
   }
 
   // Parkland: denser groves plus plenty of loners — a nature reserve, not a
