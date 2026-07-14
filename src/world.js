@@ -28,12 +28,12 @@ export function buildWorld(scene, heightAt, worldSeed) {
   const sunDirection = SUN_DIR.clone();
   const sun = new THREE.DirectionalLight(PALETTE.sunlight, 1.6);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -70;
-  sun.shadow.camera.right = 70;
-  sun.shadow.camera.top = 70;
-  sun.shadow.camera.bottom = -70;
-  sun.shadow.camera.far = 400;
+  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.camera.left = -55;
+  sun.shadow.camera.right = 55;
+  sun.shadow.camera.top = 55;
+  sun.shadow.camera.bottom = -55;
+  sun.shadow.camera.far = 300;
   sun.shadow.bias = -0.002;
   scene.add(sun, sun.target);
 
@@ -122,6 +122,8 @@ export function buildWorld(scene, heightAt, worldSeed) {
     const limbParts = [];
     const puffsA = [];
     const puffsB = [];
+    const lowA = []; // far-LOD silhouette: one big blob per cluster
+    const lowB = [];
 
     const limb = (start, end, rBase, rTip) => {
       const dir = end.clone().sub(start);
@@ -134,7 +136,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
       limbParts.push(geo);
     };
 
-    const puff = (center, r) => {
+    const puff = (center, r, sink = null) => {
       const geo = puffGeos[Math.floor(rand() * puffGeos.length)].clone();
       const q = new THREE.Quaternion().setFromAxisAngle(UP, rand() * Math.PI * 2);
       geo.applyMatrix4(new THREE.Matrix4().compose(center, q, new THREE.Vector3(r, r * 0.9, r)));
@@ -148,10 +150,11 @@ export function buildWorld(scene, heightAt, worldSeed) {
           Math.min(1.2, cols.getY(i) * depth),
           Math.min(1.2, cols.getZ(i) * depth));
       }
-      (rand() < 0.6 ? puffsA : puffsB).push(geo);
+      (sink || (rand() < 0.6 ? puffsA : puffsB)).push(geo);
     };
 
-    // A leaf CLUSTER: many small puffs packed around a branch tip.
+    // A leaf CLUSTER: many small puffs packed around a branch tip. The far
+    // LOD gets one matching big blob instead — same silhouette, ~10× cheaper.
     const cluster = (center, clusterR, big) => {
       const n = big ? 10 + Math.floor(rand() * 4) : 4 + Math.floor(rand() * 3);
       for (let i = 0; i < n; i++) {
@@ -165,6 +168,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
         );
         puff(c, clusterR * (0.38 + rand() * 0.26));
       }
+      puff(center, clusterR * 1.08, rand() < 0.6 ? lowA : lowB);
     };
 
     // Trunk: leans a little, tapers, splits high (fly under the canopy).
@@ -208,17 +212,27 @@ export function buildWorld(scene, heightAt, worldSeed) {
     // Leader cluster crowning the trunk itself.
     cluster(top.clone().add(new THREE.Vector3(0, h * 0.07, 0)), h * (0.18 + rand() * 0.05), true);
 
-    const tree = new THREE.Group();
-    const wood = new THREE.Mesh(mergeGeometries(limbParts), trunkMat);
-    wood.castShadow = true;
-    tree.add(wood);
+    // Two detail levels sharing the wood geometry; puff detail only near by.
+    const woodGeo = mergeGeometries(limbParts);
+    const full = new THREE.Group();
+    const woodHi = new THREE.Mesh(woodGeo, trunkMat);
+    woodHi.castShadow = true;
+    full.add(woodHi);
     for (const [parts, mat] of [[puffsA, matA], [puffsB, matB]]) {
       if (!parts.length) continue;
       const foliage = new THREE.Mesh(mergeGeometries(parts), mat);
       foliage.castShadow = true;
-      tree.add(foliage);
+      full.add(foliage);
+    }
+    const low = new THREE.Group();
+    low.add(new THREE.Mesh(woodGeo, trunkMat)); // no shadows at distance
+    for (const [parts, mat] of [[lowA, matA], [lowB, matB]]) {
+      if (parts.length) low.add(new THREE.Mesh(mergeGeometries(parts), mat));
     }
 
+    const tree = new THREE.LOD();
+    tree.addLevel(full, 0);
+    tree.addLevel(low, 170);
     tree.position.set(x, y, z);
     tree.rotation.y = rand() * Math.PI * 2;
     tree.userData.phase = rand() * Math.PI * 2;

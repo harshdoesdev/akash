@@ -70,6 +70,17 @@ let fpsFrames = 0;
 let fpsTime = 0;
 let fpsValue = 0;
 
+// Adaptive resolution: if the frame rate sags, step the pixel ratio down —
+// the painterly style hides the softness far better than it hides stutter.
+let pixelScale = Math.min(window.devicePixelRatio, 2);
+function applyPixelScale(p) {
+  pixelScale = p;
+  renderer.setPixelRatio(p);
+  composer.setPixelRatio(p);
+  composer.setSize(window.innerWidth, window.innerHeight);
+}
+applyPixelScale(pixelScale);
+
 renderer.setAnimationLoop(() => {
   // Clamp dt so a backgrounded tab doesn't launch the drone into orbit.
   const dt = Math.min(clock.getDelta(), 1 / 20);
@@ -107,6 +118,10 @@ renderer.setAnimationLoop(() => {
     fpsValue = Math.round(fpsFrames / fpsTime);
     fpsFrames = 0;
     fpsTime = 0;
+    // Give the page a few seconds to settle, then trade pixels for frames.
+    if (clock.elapsedTime > 4 && fpsValue > 0 && fpsValue < 45 && pixelScale > 1.0) {
+      applyPixelScale(Math.max(1.0, pixelScale - 0.25));
+    }
   }
 
   hudTimer += dt;
