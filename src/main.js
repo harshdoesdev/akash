@@ -9,6 +9,7 @@ import { createPostFX } from './postfx.js';
 import { createCritters } from './critters.js';
 import { createDayNight } from './dayNight.js';
 import { createFireflies } from './fireflies.js';
+import { createDust } from './dust.js';
 import { hashSeed } from './rng.js';
 import { createGrass } from './grass.js';
 import { createSky } from './sky.js';
@@ -65,6 +66,7 @@ const dayNight = createDayNight({
   terrainMat: terrain.mesh.material,
 });
 const fireflies = createFireflies(scene, terrain.heightAt);
+const dust = createDust(scene, terrain.heightAt);
 window.drone = drone; // dev: live tuning/inspection from the console
 window.renderer = renderer;
 window.surfaceAt = surfaceAt;
@@ -121,6 +123,12 @@ renderer.setAnimationLoop(() => {
   world.update(time);
   dayNight.update(dt);
   fireflies.update(dt, time, drone.position, dayNight.nightFactor);
+  dust.update(dt, {
+    x: drone.position.x,
+    z: drone.position.z,
+    y: drone.position.y,
+    throttle: drone.throttleVisual,
+  });
   critters.update(dt, time, drone.position,
     drone.position.y - surfaceAt(drone.position.x, drone.position.z));
   audio.update(dt, {
