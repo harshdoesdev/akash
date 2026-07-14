@@ -6,6 +6,7 @@ import { createWater } from './water.js';
 import { createWindOverlay } from './windOverlay.js';
 import { createAudio } from './audio.js';
 import { createPostFX } from './postfx.js';
+import { createCritters } from './critters.js';
 import { hashSeed } from './rng.js';
 import { createGrass } from './grass.js';
 import { createSky } from './sky.js';
@@ -50,9 +51,11 @@ const surfaceAt = (x, z) => Math.max(terrain.heightAt(x, z), WATER_LEVEL);
 const drone = new Drone(scene, surfaceAt, world.colliders);
 const chaseCam = new ChaseCamera(camera, surfaceAt);
 const composer = createPostFX(renderer, scene, camera);
+const critters = createCritters(scene, terrain.heightAt, world.colliders, worldSeed);
 window.drone = drone; // dev: live tuning/inspection from the console
 window.renderer = renderer;
 window.surfaceAt = surfaceAt;
+window.critters = critters;
 
 const hud = document.getElementById('hud');
 document.getElementById('controls').insertAdjacentText('beforeend', `  ·  world: ${seedStr}`);
@@ -102,6 +105,8 @@ renderer.setAnimationLoop(() => {
   });
   windOverlay.update(time);
   world.update(time);
+  critters.update(dt, time, drone.position,
+    drone.position.y - surfaceAt(drone.position.x, drone.position.z));
   audio.update(dt, {
     speed: drone.speed,
     throttle: drone.throttleVisual,
