@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>dronedronego</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: #0a0a0a;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      #app { position: fixed; inset: 0; }
+      #hud {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        color: #fff;
+        font-size: 13px;
+        line-height: 1.7;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        pointer-events: none;
+      }
+      #controls {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 12px;
+        line-height: 1.7;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="hud"></div>
+    <div id="controls">
+      W/S forward/back &nbsp; A/D turn &nbsp; ←/→ strafe &nbsp; SPACE up &nbsp; SHIFT down &nbsp; R reset &nbsp; M sound
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
