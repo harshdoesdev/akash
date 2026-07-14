@@ -4,6 +4,7 @@ import { SUN_DIR, PALETTE } from './palette.js';
 import { makeRand } from './rng.js';
 import { valueNoise } from './noise.js';
 import { distToPath, WATER_LEVEL } from './terrain.js';
+import { makeFoliageMaterial } from './foliageMaterial.js';
 
 // Toon-shaded world dressing: lights, tree groves, rocks, the hero tree and
 // the motorhome-garage. Terrain/grass/sky live in their own modules.
@@ -58,7 +59,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
       const x = pos.getX(i);
       const y = pos.getY(i);
       const z = pos.getZ(i);
-      const bump = 1 + (valueNoise(x * 1.8 + seed, (y * 1.3 + z) * 1.8 + seed) - 0.5) * 0.28;
+      const bump = 1 + (valueNoise(x * 2.1 + seed, (y * 1.4 + z) * 2.1 + seed) - 0.5) * 0.42;
       pos.setXYZ(i, x * bump, y * bump * 0.92, z * bump);
     }
     geo.computeVertexNormals();
@@ -72,17 +73,19 @@ export function buildWorld(scene, heightAt, worldSeed) {
     puffGeos.push(geo);
   }
 
-  // Crisper 3-band cel ramp for foliage — each puff shows a distinct lit cap
-  // and shadow belly, like hand-painted leaf clusters.
-  const foliageRamp = new THREE.DataTexture(new Uint8Array([115, 190, 255]), 3, 1, THREE.RedFormat);
-  foliageRamp.magFilter = THREE.NearestFilter;
-  foliageRamp.minFilter = THREE.NearestFilter;
-  foliageRamp.needsUpdate = true;
 
-  const leaf = (color) =>
-    new THREE.MeshToonMaterial({ color, gradientMap: foliageRamp, vertexColors: true });
-  const greenMats = [leaf(0x5da34a), leaf(0x6fb355), leaf(0x82c05f), leaf(0x529844)];
-  const blossomMats = [leaf(0xf0b7c8), leaf(0xf5c9d4), leaf(0xe8a4ba)];
+  // Hand-painted band palettes: deep cool shadow → mid → warm light → glow.
+  const F = (s, m, l, g) => makeFoliageMaterial(s, m, l, g, scene.fog);
+  const greenMats = [
+    F(0x2f5c33, 0x4f9247, 0x7fbe58, 0xaed86f),
+    F(0x315f2f, 0x579b4a, 0x8ac763, 0xbadf77),
+    F(0x2a5731, 0x468c42, 0x74b653, 0xa2d167),
+    F(0x33603a, 0x5aa04f, 0x8dc85f, 0xc0e07d),
+  ];
+  const blossomMats = [
+    F(0x9c5f74, 0xcf8ba0, 0xefb9c8, 0xfadbe4),
+    F(0x96586d, 0xc78197, 0xe9adc0, 0xf7d3de),
+  ];
   const trunkMat = toon(0x8a6247);
 
   // Hand-painted bark (Codex-generated); flat color is the fallback. Leaves
@@ -196,7 +199,8 @@ export function buildWorld(scene, heightAt, worldSeed) {
       const len = h * (0.26 - hf * 0.09) * (0.85 + rand() * 0.3);
       const end = start.clone().addScaledVector(dir, len);
       limb(start, end, h * 0.016, h * 0.008);
-      cluster(end.clone().addScaledVector(dir, h * 0.03), h * (0.17 + rand() * 0.06), true);
+      // Pull tip clusters toward the canopy axis so lobes mound into a dome.
+      cluster(end.clone().addScaledVector(dir, h * 0.03).lerp(top, 0.15), h * (0.17 + rand() * 0.06), true);
 
       const twigs = 1 + Math.floor(rand() * 2);
       for (let t = 0; t < twigs; t++) {
@@ -209,8 +213,10 @@ export function buildWorld(scene, heightAt, worldSeed) {
         cluster(tend.clone().addScaledVector(tdir, h * 0.02), h * (0.10 + rand() * 0.04), false);
       }
     }
-    // Leader cluster crowning the trunk itself.
+    // Leader cluster crowning the trunk, plus an interior fill mass so the
+    // canopy reads as one dome with lobes, not satellite pompoms.
     cluster(top.clone().add(new THREE.Vector3(0, h * 0.07, 0)), h * (0.18 + rand() * 0.05), true);
+    cluster(top.clone().add(new THREE.Vector3(0, h * 0.16, 0)), h * (0.2 + rand() * 0.05), true);
 
     // Two detail levels sharing the wood geometry; puff detail only near by.
     const woodGeo = mergeGeometries(limbParts);
