@@ -305,6 +305,7 @@ export class Drone {
     const bodyR = 0.32;
     for (const c of this.colliders) {
       if (this.mesh.position.y > c.top) continue;
+      if (c.base !== undefined && this.mesh.position.y < c.base) continue;
       const dx = this.mesh.position.x - c.x;
       const dz = this.mesh.position.z - c.z;
       const R = c.r + bodyR;

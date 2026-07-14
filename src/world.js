@@ -256,54 +256,26 @@ export function buildWorld(scene, heightAt, worldSeed) {
     colliders.push({ x, z, r: Math.max(0.28, h * 0.042), top: y + trunkLen * 1.08 });
   }
 
-  // Dense parkland: big groves, plenty of loners — a real forest reserve.
-  for (let g = 0; g < 48; g++) {
+  // Dense forest: big groves, plenty of loners — a real reserve canopy.
+  for (let g = 0; g < 62; g++) {
     const gx = (rand() - 0.5) * 1600;
     const gz = (rand() - 0.5) * 1600;
     const gr = Math.hypot(gx, gz);
     if (gr < 60 || gr > 760) continue;
-    const count = 8 + Math.floor(rand() * 16);
+    const count = 9 + Math.floor(rand() * 18);
     for (let t = 0; t < count; t++) {
       const a = rand() * Math.PI * 2;
-      const d = rand() * (18 + count * 2.2);
+      const d = rand() * (18 + count * 2.4);
       addTree(gx + Math.cos(a) * d, gz + Math.sin(a) * d);
     }
   }
-  for (let i = 0; i < 130; i++) {
+  for (let i = 0; i < 170; i++) {
     const x = (rand() - 0.5) * 1600;
     const z = (rand() - 0.5) * 1600;
     const r = Math.hypot(x, z);
     if (r > 30 && r < 780) addTree(x, z);
   }
 
-  // Bushes: low puff clumps scattered through the meadow understory.
-  const bushGroundOk = (x, z) => {
-    const r = Math.hypot(x, z);
-    return r > 12 && r < 780 && heightAt(x, z) > WATER_LEVEL + 1 && distToPath(x, z) > 2.5;
-  };
-  for (let i = 0; i < 240; i++) {
-    const x = (rand() - 0.5) * 1600;
-    const z = (rand() - 0.5) * 1600;
-    if (!bushGroundOk(x, z)) continue;
-    const s = 0.6 + rand() * 1.1;
-    const mat = greenMats[Math.floor(rand() * greenMats.length)];
-    const parts = [];
-    const n = 3 + Math.floor(rand() * 3);
-    for (let p = 0; p < n; p++) {
-      const geo = puffGeos[Math.floor(rand() * puffGeos.length)].clone();
-      const pr = s * (0.45 + rand() * 0.4);
-      const q = new THREE.Quaternion().setFromAxisAngle(UP, rand() * Math.PI * 2);
-      geo.applyMatrix4(new THREE.Matrix4().compose(
-        new THREE.Vector3((rand() - 0.5) * s, pr * 0.55, (rand() - 0.5) * s),
-        q,
-        new THREE.Vector3(pr, pr * 0.75, pr)
-      ));
-      parts.push(geo);
-    }
-    const bush = new THREE.Mesh(mergeGeometries(parts), mat);
-    bush.position.set(x, heightAt(x, z), z);
-    scene.add(bush);
-  }
 
   const rockMat = toon(0x9a958a);
   for (let i = 0; i < 70; i++) {
@@ -332,6 +304,105 @@ export function buildWorld(scene, heightAt, worldSeed) {
     }
   }
   addTree(best.x, best.z, 30);
+
+  // --- Fire lookout tower: home base by the spawn pad ---
+  {
+    const TX = -11;
+    const TZ = -14;
+    const baseY = heightAt(TX, TZ);
+    const PLAT = 9; // deck height
+    const woodMat = toon(0x7a5a40);
+    const deckMat = toon(0x8f6d4e);
+    const wallMat = toon(0xe8dcc0);
+    const roofMat = toon(0x9a4f3a);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffd98a }); // warm at night
+    const tower = new THREE.Group();
+
+    const beam = (a, b, r0, r1) => {
+      const dir = b.clone().sub(a);
+      const len = dir.length();
+      const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 6), woodMat);
+      mesh.position.copy(a).addScaledVector(dir, 0.5);
+      mesh.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
+      mesh.castShadow = true;
+      tower.add(mesh);
+    };
+    // Splayed legs: wide at the ground, tucked under the deck.
+    const corner = (y, sx, sz) => {
+      const half = 2.0 - 0.7 * (y / PLAT);
+      return new THREE.Vector3(sx * half, y, sz * half);
+    };
+    const SIGNS = [[1, 1], [1, -1], [-1, -1], [-1, 1]];
+    for (const [sx, sz] of SIGNS) {
+      beam(corner(0, sx, sz), corner(PLAT, sx, sz), 0.16, 0.12);
+    }
+    // X cross-bracing on all four sides, two tiers.
+    for (let s = 0; s < 4; s++) {
+      const [ax, az] = SIGNS[s];
+      const [bx, bz] = SIGNS[(s + 1) % 4];
+      for (const [y0, y1] of [[0.4, 4.6], [4.6, 8.8]]) {
+        beam(corner(y0, ax, az), corner(y1, bx, bz), 0.05, 0.05);
+        beam(corner(y0, bx, bz), corner(y1, ax, az), 0.05, 0.05);
+      }
+    }
+    // Deck, railing, cabin, window band, hip roof, antenna.
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(4.9, 0.22, 4.9), deckMat);
+    deck.position.y = PLAT + 0.11;
+    deck.castShadow = true;
+    tower.add(deck);
+    for (const [sx, sz] of SIGNS) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.08), woodMat);
+      post.position.set(sx * 2.38, PLAT + 0.7, sz * 2.38);
+      tower.add(post);
+    }
+    for (let s = 0; s < 4; s++) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(4.84, 0.07, 0.07), woodMat);
+      rail.position.y = PLAT + 1.15;
+      rail.rotation.y = (s * Math.PI) / 2;
+      rail.position.x = s % 2 === 0 ? 0 : (s === 1 ? 2.38 : -2.38);
+      rail.position.z = s % 2 === 0 ? (s === 0 ? 2.38 : -2.38) : 0;
+      tower.add(rail);
+    }
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2.4, 3.5), wallMat);
+    cabin.position.y = PLAT + 0.22 + 1.2;
+    cabin.castShadow = true;
+    tower.add(cabin);
+    for (let s = 0; s < 4; s++) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.85, 0.06), glowMat);
+      win.position.y = PLAT + 1.95;
+      win.rotation.y = (s * Math.PI) / 2;
+      win.position.x = s % 2 === 0 ? 0 : (s === 1 ? 1.76 : -1.76);
+      win.position.z = s % 2 === 0 ? (s === 0 ? 1.76 : -1.76) : 0;
+      tower.add(win);
+    }
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.95, 1.5, 4), roofMat);
+    roof.position.y = PLAT + 0.22 + 2.4 + 0.75;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    tower.add(roof);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.03, 1.4, 6), woodMat);
+    mast.position.y = PLAT + 4.9;
+    tower.add(mast);
+
+    tower.position.set(TX, baseY, TZ);
+    tower.rotation.y = 0.3;
+    scene.add(tower);
+
+    // Colliders: four legs (fly between them!) and the cabin block.
+    for (const [sx, sz] of SIGNS) {
+      const c = corner(PLAT / 2, sx, sz);
+      // Legs lean, so approximate each with a slightly fat mid-height post.
+      const cos = Math.cos(0.3);
+      const sin = Math.sin(0.3);
+      colliders.push({
+        x: TX + c.x * cos + c.z * sin,
+        z: TZ - c.x * sin + c.z * cos,
+        r: 0.45,
+        top: baseY + PLAT,
+      });
+    }
+    colliders.push({ x: TX, z: TZ, r: 3.1, top: baseY + PLAT + 4.4, base: baseY + PLAT - 0.4 });
+  }
 
   // A couple of framing trees near home base.
   addTree(14, -24);
