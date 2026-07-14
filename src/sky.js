@@ -21,16 +21,36 @@ const skyFragment = /* glsl */ `
   uniform vec3 uMid;
   uniform vec3 uHorizon;
   uniform vec3 uSunDir;
+  uniform vec3 uMoonDir;
+  uniform float uNight;
   varying vec3 vDir;
+
+  float hash(vec3 p) {
+    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+  }
+
   void main() {
     vec3 dir = normalize(vDir);
     float t = clamp(dir.y, 0.0, 1.0);
     // Shinkai three-stop: warm luminous horizon → pale cyan band → deep azure.
     vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.22, t));
     col = mix(col, uZenith, smoothstep(0.16, 0.72, t));
+    float dayGlow = (1.0 - uNight);
     float sun = pow(max(dot(dir, uSunDir), 0.0), 120.0);
     float halo = pow(max(dot(dir, uSunDir), 0.0), 5.0);
-    col += vec3(1.0, 0.93, 0.72) * sun * 0.85 + vec3(1.0, 0.88, 0.6) * halo * 0.14;
+    col += (vec3(1.0, 0.93, 0.72) * sun * 0.85 + vec3(1.0, 0.88, 0.6) * halo * 0.14) * dayGlow;
+
+    if (uNight > 0.01) {
+      // Stars: sparse hash grid over view direction, fading near the horizon.
+      vec3 cell = floor(dir * 220.0);
+      float s = step(0.9975, hash(cell));
+      float mag = 0.4 + hash(cell + 7.0) * 0.6;
+      col += vec3(0.85, 0.9, 1.0) * s * mag * uNight * smoothstep(0.04, 0.3, dir.y);
+      // Moon: bright disc + soft halo.
+      float m = max(dot(dir, uMoonDir), 0.0);
+      col += (smoothstep(0.9993, 0.9997, m) * 0.9 + pow(m, 60.0) * 0.18) * vec3(0.92, 0.95, 1.0) * uNight;
+    }
+
     gl_FragColor = vec4(col, 1.0);
     #include <colorspace_fragment>
   }
@@ -75,6 +95,8 @@ export function createSky(scene, sunDirection, worldSeed) {
         uMid: { value: new THREE.Color(PALETTE.skyMid) },
         uHorizon: { value: horizon },
         uSunDir: { value: sunDirection.clone().normalize() },
+        uMoonDir: { value: new THREE.Vector3(-0.35, 0.55, 0.45).normalize() },
+        uNight: { value: 0 },
       },
       side: THREE.BackSide,
       depthWrite: false,
@@ -85,10 +107,8 @@ export function createSky(scene, sunDirection, worldSeed) {
   scene.add(sky);
 
   // Ground skirt: the world beyond the terrain, pure haze.
-  const skirt = new THREE.Mesh(
-    new THREE.CircleGeometry(5000, 48),
-    new THREE.MeshBasicMaterial({ color: horizon, fog: false })
-  );
+  const skirtMat = new THREE.MeshBasicMaterial({ color: horizon, fog: false });
+  const skirt = new THREE.Mesh(new THREE.CircleGeometry(5000, 48), skirtMat);
   skirt.rotation.x = -Math.PI / 2;
   skirt.position.y = -45; // below the deepest lake bed
 
@@ -97,6 +117,7 @@ export function createSky(scene, sunDirection, worldSeed) {
 
   // Aerial perspective: three rings of hills, each farther, paler, taller.
   const follow = [skirt];
+  const ridgeMats = [];
   // Beyond the real terrain (which ends ~1000m out), so they never clip it.
   const RIDGES = [
     { radius: 1150, base: 55, amp: 115, color: PALETTE.ridges[0], freq: 2.4, seed: 0 },
@@ -119,14 +140,13 @@ export function createSky(scene, sunDirection, worldSeed) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
     geo.setIndex(idx);
-    const ridge = new THREE.Mesh(
-      geo,
-      new THREE.MeshBasicMaterial({ color: r.color, fog: false, side: THREE.DoubleSide })
-    );
+    const ridgeMat = new THREE.MeshBasicMaterial({ color: r.color, fog: false, side: THREE.DoubleSide });
+    const ridge = new THREE.Mesh(geo, ridgeMat);
     ridge.frustumCulled = false;
     ridge.renderOrder = -1;
     scene.add(ridge);
     follow.push(ridge);
+    ridgeMats.push(ridgeMat);
   }
 
   // Clouds.
@@ -179,6 +199,10 @@ export function createSky(scene, sunDirection, worldSeed) {
   }
 
   return {
+    skyUniforms: sky.material.uniforms,
+    cloudMat,
+    ridgeMats,
+    skirtMat,
     update(dt, dronePos) {
       sky.position.set(dronePos.x, 0, dronePos.z);
       for (const obj of follow) obj.position.set(dronePos.x, obj.position.y, dronePos.z);

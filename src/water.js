@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { TERRAIN_SIZE, WATER_LEVEL } from './terrain.js';
+import { GLOBAL_TINT } from './dayNight.js';
 
 // Ghibli lakes: one still water plane at WATER_LEVEL — wherever the terrain
 // dips below it, a lake appears. The shader samples the terrain heightmap to
@@ -25,6 +26,7 @@ const fragmentShader = /* glsl */ `
   uniform vec2 uDroneXZ;
   uniform vec2 uDroneVel; // horizontal velocity — stretches the wash into a wake
   uniform float uWash; // 0..1 prop-wash intensity (low + throttled = strong)
+  uniform vec3 uTint;
   varying vec3 vWorld;
   varying float vFogDepth;
 
@@ -97,6 +99,8 @@ const fragmentShader = /* glsl */ `
       col += vec3(0.08, 0.10, 0.10) * uWash * smoothstep(2.0, 0.2, dw); // churned center
     }
 
+    col *= uTint; // day/night
+
     // Soft dissolve at zero depth — the fix for the hard cut-out edge where
     // the water plane slices the terrain mesh.
     float alpha = smoothstep(0.0, 0.2, depth + wob * 0.12);
@@ -117,6 +121,7 @@ export function createWater(scene, heightTexture, fog) {
     uDroneXZ: { value: new THREE.Vector2() },
     uDroneVel: { value: new THREE.Vector2() },
     uWash: { value: 0 },
+    uTint: GLOBAL_TINT,
   };
   const mesh = new THREE.Mesh(
     new THREE.CircleGeometry(TERRAIN_SIZE / 2, 48),

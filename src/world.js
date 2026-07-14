@@ -256,25 +256,53 @@ export function buildWorld(scene, heightAt, worldSeed) {
     colliders.push({ x, z, r: Math.max(0.28, h * 0.042), top: y + trunkLen * 1.08 });
   }
 
-  // Parkland: denser groves plus plenty of loners — a nature reserve, not a
-  // lawn with occasional shrubs.
-  for (let g = 0; g < 34; g++) {
+  // Dense parkland: big groves, plenty of loners — a real forest reserve.
+  for (let g = 0; g < 48; g++) {
     const gx = (rand() - 0.5) * 1600;
     const gz = (rand() - 0.5) * 1600;
     const gr = Math.hypot(gx, gz);
     if (gr < 60 || gr > 760) continue;
-    const count = 6 + Math.floor(rand() * 14);
+    const count = 8 + Math.floor(rand() * 16);
     for (let t = 0; t < count; t++) {
       const a = rand() * Math.PI * 2;
-      const d = rand() * (16 + count * 2.2);
+      const d = rand() * (18 + count * 2.2);
       addTree(gx + Math.cos(a) * d, gz + Math.sin(a) * d);
     }
   }
-  for (let i = 0; i < 85; i++) {
+  for (let i = 0; i < 130; i++) {
     const x = (rand() - 0.5) * 1600;
     const z = (rand() - 0.5) * 1600;
     const r = Math.hypot(x, z);
     if (r > 30 && r < 780) addTree(x, z);
+  }
+
+  // Bushes: low puff clumps scattered through the meadow understory.
+  const bushGroundOk = (x, z) => {
+    const r = Math.hypot(x, z);
+    return r > 12 && r < 780 && heightAt(x, z) > WATER_LEVEL + 1 && distToPath(x, z) > 2.5;
+  };
+  for (let i = 0; i < 240; i++) {
+    const x = (rand() - 0.5) * 1600;
+    const z = (rand() - 0.5) * 1600;
+    if (!bushGroundOk(x, z)) continue;
+    const s = 0.6 + rand() * 1.1;
+    const mat = greenMats[Math.floor(rand() * greenMats.length)];
+    const parts = [];
+    const n = 3 + Math.floor(rand() * 3);
+    for (let p = 0; p < n; p++) {
+      const geo = puffGeos[Math.floor(rand() * puffGeos.length)].clone();
+      const pr = s * (0.45 + rand() * 0.4);
+      const q = new THREE.Quaternion().setFromAxisAngle(UP, rand() * Math.PI * 2);
+      geo.applyMatrix4(new THREE.Matrix4().compose(
+        new THREE.Vector3((rand() - 0.5) * s, pr * 0.55, (rand() - 0.5) * s),
+        q,
+        new THREE.Vector3(pr, pr * 0.75, pr)
+      ));
+      parts.push(geo);
+    }
+    const bush = new THREE.Mesh(mergeGeometries(parts), mat);
+    bush.position.set(x, heightAt(x, z), z);
+    scene.add(bush);
   }
 
   const rockMat = toon(0x9a958a);
@@ -305,42 +333,6 @@ export function buildWorld(scene, heightAt, worldSeed) {
   }
   addTree(best.x, best.z, 30);
 
-  // Motorhome-garage placeholder: friendly boxy camper.
-  const van = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.3, 2.3), toon(0xf0e6d2));
-  body.position.y = 1.75;
-  body.castShadow = true;
-  van.add(body);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(5.24, 0.35, 2.34), toon(0xd97b4f));
-  stripe.position.y = 1.35;
-  van.add(stripe);
-  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.5, 2.2), toon(0xe8dcc4));
-  cab.position.set(3.1, 1.25, 0);
-  cab.castShadow = true;
-  van.add(cab);
-  const glass = toon(0x8fb9c9);
-  const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 1.9), glass);
-  windshield.position.set(3.75, 1.5, 0);
-  van.add(windshield);
-  const window1 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.75, 0.1), glass);
-  window1.position.set(-0.6, 2.2, 1.18);
-  van.add(window1);
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.7, 0.1), toon(0x6e5340));
-  door.position.set(1.5, 1.35, 1.18);
-  van.add(door);
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 12);
-  const wheelMat = toon(0x33383d);
-  for (const [wx, wz] of [[2.9, 1.05], [2.9, -1.05], [-1.6, 1.05], [-1.6, -1.05]]) {
-    const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-    wheel.rotation.x = Math.PI / 2;
-    wheel.position.set(wx, 0.42, wz);
-    van.add(wheel);
-  }
-  // Parked ahead-left of spawn so it frames the opening shot.
-  van.position.set(-7, heightAt(-7, -5), -5);
-  van.rotation.y = 0.65;
-  scene.add(van);
-
   // A couple of framing trees near home base.
   addTree(14, -24);
   addTree(-20, -16);
@@ -348,6 +340,7 @@ export function buildWorld(scene, heightAt, worldSeed) {
 
   return {
     sun,
+    hemi,
     sunDirection,
     colliders,
     update(time) {

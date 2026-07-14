@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SUN_DIR } from './palette.js';
+import { GLOBAL_TINT } from './dayNight.js';
 
 // Hand-painted foliage shading. Instead of a smooth toon gradient, light is
 // quantized into four hard bands (deep shadow → mid → lit → sunlit dabs)
@@ -27,6 +28,7 @@ const fragmentShader = /* glsl */ `
   uniform vec3 uMid;
   uniform vec3 uLight;
   uniform vec3 uGlow;
+  uniform vec3 uTint;
   uniform vec3 uSunDir;
   uniform vec3 uFogColor;
   uniform float uFogNear;
@@ -72,6 +74,7 @@ const fragmentShader = /* glsl */ `
     col = mix(col, uLight, smoothstep(0.66, 0.78, t));
     col = mix(col, uGlow, smoothstep(0.93, 0.965, t) * 0.5);
     col *= vColor; // canopy-depth shading baked per puff
+    col *= uTint;  // day/night
 
     float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
     gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
@@ -88,6 +91,7 @@ export function makeFoliageMaterial(shadow, mid, light, glow, fog) {
       uMid: { value: new THREE.Color(mid) },
       uLight: { value: new THREE.Color(light) },
       uGlow: { value: new THREE.Color(glow) },
+      uTint: GLOBAL_TINT,
       uSunDir: { value: SUN_DIR.clone() },
       uFogColor: { value: fog.color },
       uFogNear: { value: fog.near },

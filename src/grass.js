@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TERRAIN_SIZE } from './terrain.js';
 import { makeRand } from './rng.js';
+import { GLOBAL_TINT } from './dayNight.js';
 
 // Instanced grass meadow. Blades live on a fixed world grid inside a square
 // "patch"; the vertex shader wraps each blade around the drone (mod trick),
@@ -107,6 +108,7 @@ const grassVertex = /* glsl */ `
 
 const grassFragment = /* glsl */ `
   uniform float uTime;
+  uniform vec3 uTint;
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
@@ -132,6 +134,7 @@ const grassFragment = /* glsl */ `
     float c2 = sin(dot(vWorldXZ, vec2(-0.0035, 0.0065)) - uTime * 0.07 + 2.9);
     float cloud = smoothstep(0.35, 1.1, c1 * 0.7 + c2 * 0.5);
     col = mix(col, col * vec3(0.72, 0.80, 0.88), cloud * 0.5);
+    col *= uTint; // day/night
 
     float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
     gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
@@ -175,6 +178,7 @@ const flowerVertex = /* glsl */ `
 `;
 
 const flowerFragment = /* glsl */ `
+  uniform vec3 uTint;
   uniform vec3 uFogColor;
   uniform float uFogNear;
   uniform float uFogFar;
@@ -186,6 +190,7 @@ const flowerFragment = /* glsl */ `
     vec3 yellow = vec3(0.99, 0.80, 0.35);
     vec3 pink = vec3(0.96, 0.63, 0.68);
     vec3 col = vKind < 0.62 ? white : (vKind < 0.85 ? yellow : pink);
+    col *= uTint; // day/night
     float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
     gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
     #include <colorspace_fragment>
@@ -248,6 +253,7 @@ export function createGrass(scene, heightTexture, colorTexture, fog, worldSeed) 
     uDroneY: { value: 0 },
     uWash: { value: 0 },
     uTime: { value: 0 },
+    uTint: GLOBAL_TINT,
     uFogColor: { value: fog.color },
     uFogNear: { value: fog.near },
     uFogFar: { value: fog.far },

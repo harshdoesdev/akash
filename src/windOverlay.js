@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLOBAL_TINT } from './dayNight.js';
 
 // The motion layer that makes the meadow alive at EVERY distance: gusts of
 // wind sweep across the field as traveling bands of warm light, and huge slow
@@ -21,6 +22,7 @@ const vertexShader = /* glsl */ `
 const fragmentShader = /* glsl */ `
   uniform sampler2D uColorMap;
   uniform float uTime;
+  uniform vec3 uTint;
   uniform float uFogNear;
   uniform float uFogFar;
   varying vec2 vUv;
@@ -43,7 +45,9 @@ const fragmentShader = /* glsl */ `
 
     float net = gust * 0.55 - cloud * 0.8;
     vec3 tint = net > 0.0 ? vec3(1.0, 0.98, 0.72) : vec3(0.10, 0.18, 0.26);
-    float alpha = abs(net) * 0.17 * mask;
+    // Wind light-bands dim with the day (moonlit gusts are subtle).
+    float dayLum = (uTint.r + uTint.g + uTint.b) / 3.0;
+    float alpha = abs(net) * 0.17 * mask * (0.25 + 0.75 * dayLum);
     alpha *= 1.0 - smoothstep(uFogNear, uFogFar, vFogDepth);
 
     gl_FragColor = vec4(tint, alpha);
@@ -55,6 +59,7 @@ export function createWindOverlay(scene, terrainGeometry, colorTexture, fog) {
   const uniforms = {
     uColorMap: { value: colorTexture },
     uTime: { value: 0 },
+    uTint: GLOBAL_TINT,
     uFogNear: { value: fog.near },
     uFogFar: { value: fog.far },
   };
