@@ -56,6 +56,33 @@ const skyFragment = /* glsl */ `
   }
 `;
 
+// Towering cumulus: blobs packed inside a tapering envelope with heavy
+// vertical overlap — one solid cauliflower column, never a stack of discs.
+function buildTower(rand) {
+  const parts = [];
+  const H = 42 + rand() * 20;
+  const baseR = 17 + rand() * 8;
+  let y = 0;
+  while (y < H) {
+    const t = y / H;
+    const envR = baseR * (1 - t * 0.62) * (0.85 + rand() * 0.3);
+    const n = 2 + Math.floor(rand() * 2);
+    for (let i = 0; i < n; i++) {
+      const r = envR * (0.5 + rand() * 0.3);
+      const a = rand() * Math.PI * 2;
+      const d = Math.max(0, envR - r) * rand();
+      const blob = new THREE.SphereGeometry(r, 10, 8);
+      blob.scale(1, 0.72 + rand() * 0.2, 1);
+      blob.translate(Math.cos(a) * d, y + r * 0.25, Math.sin(a) * d);
+      parts.push(blob);
+    }
+    y += envR * 0.45; // overlap strongly — no necking between levels
+  }
+  const geo = mergeGeometries(parts);
+  geo.center();
+  return geo;
+}
+
 // Cumulus: a cluster of squashed spheres, bottoms roughly aligned, merged
 // into one geometry. Toon-shaded with a nearly-white ramp so tops glow and
 // undersides go soft blue-gray.
@@ -168,23 +195,9 @@ export function createSky(scene, sunDirection, worldSeed) {
   // cumulonimbus stacks — the Shinkai skyline.
   for (let i = 0; i < 21; i++) {
     const kind = i < 9 ? 'horizon' : i < 18 ? 'high' : 'tower';
-    let geo = buildCloud(rand);
-    if (kind === 'tower') {
-      // Stack shrinking puffs upward into a cauliflower column.
-      const layers = [geo];
-      let y = 10;
-      for (let l = 0; l < 3; l++) {
-        const layer = buildCloud(rand);
-        const shrink = 0.8 - l * 0.18;
-        layer.scale(shrink, shrink, shrink);
-        layer.translate((rand() - 0.5) * 8, y, (rand() - 0.5) * 8);
-        layers.push(layer);
-        y += 9 - l * 2;
-      }
-      geo = mergeGeometries(layers);
-    }
+    const geo = kind === 'tower' ? buildTower(rand) : buildCloud(rand);
     const cloud = new THREE.Mesh(geo, cloudMat);
-    const s = kind === 'horizon' ? 2.6 + rand() * 2 : kind === 'high' ? 2 + rand() * 2.2 : 3.4 + rand() * 1.6;
+    const s = kind === 'horizon' ? 2.6 + rand() * 2 : kind === 'high' ? 2 + rand() * 2.2 : 1.4 + rand() * 0.6;
     cloud.scale.setScalar(s);
     if (kind === 'high') {
       cloud.position.set((rand() - 0.5) * 1400, 130 + rand() * 120, (rand() - 0.5) * 1400);
@@ -203,6 +216,7 @@ export function createSky(scene, sunDirection, worldSeed) {
     cloudMat,
     ridgeMats,
     skirtMat,
+    clouds,
     update(dt, dronePos) {
       sky.position.set(dronePos.x, 0, dronePos.z);
       for (const obj of follow) obj.position.set(dronePos.x, obj.position.y, dronePos.z);

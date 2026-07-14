@@ -69,6 +69,7 @@ window.drone = drone; // dev: live tuning/inspection from the console
 window.renderer = renderer;
 window.surfaceAt = surfaceAt;
 window.critters = critters;
+window.sky = sky;
 
 const hud = document.getElementById('hud');
 document.getElementById('controls').insertAdjacentText('beforeend', `  ·  world: ${seedStr}`);
