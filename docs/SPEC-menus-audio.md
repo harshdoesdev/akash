@@ -17,37 +17,37 @@ was opened from.
 ## Checklist
 
 ### Rename → akash
-- [ ] index.html title, boot screen, menu wordmark (आकाश / akash)
-- [ ] package.json name
-- [ ] memory notes updated
+- [x] index.html title, boot screen, menu wordmark (आकाश / akash)
+- [x] package.json name
+- [x] memory notes updated
 
 ### Screens system (src/ui.js)
-- [ ] Screen registry: DOM sections with `.screen`, crossfade via `.active`
-- [ ] States: `menu | playing | paused | settings`; settings remembers its return screen
-- [ ] ESC: playing→paused, paused→playing, settings→back
-- [ ] HUD + controls text only visible while playing (body.in-game)
-- [ ] Input gated: drone gets zero input except while playing
-- [ ] Cinematic menu camera: slow orbit around spawn, gentle bob; chase cam while playing/paused
+- [x] Screen registry: DOM sections with `.screen`, crossfade via `.active`
+- [x] States: `menu | playing | paused | settings`; settings remembers its return screen
+- [x] ESC: playing→paused, paused→playing, settings→back
+- [x] HUD + controls text only visible while playing (body.in-game)
+- [x] Input gated: drone gets zero input except while playing
+- [x] Cinematic menu camera: slow orbit around spawn, gentle bob; chase cam while playing/paused
 
 ### Main menu
-- [ ] Wordmark art: आकाश over "akash", subtitle, soft edge-shade over the live world
-- [ ] Buttons: fly, settings
-- [ ] Seed line: shows current world seed
-- [ ] Audio starts on Fly (user gesture — satisfies autoplay policy)
+- [x] Wordmark art: आकाश over "akash", subtitle, soft edge-shade over the live world
+- [x] Buttons: fly, settings
+- [x] Seed line: shows current world seed
+- [x] Audio starts on Fly (user gesture — satisfies autoplay policy)
 
 ### Sound settings
-- [ ] Audio buses: master / drone (motor) / ambience (wind + birds) / bgm
-- [ ] Settings screen with 4 sliders (0–100), live while dragging
-- [ ] Persisted to localStorage (`akash-audio-v1`), loaded on boot
-- [ ] M mute toggle still works (independent of master slider)
+- [x] Audio buses: master / drone (motor) / ambience (wind + birds) / bgm
+- [x] Settings screen with 4 sliders (0–100), live while dragging
+- [x] Persisted to localStorage (`akash-audio-v1`), loaded on boot
+- [x] M mute toggle still works (independent of master slider)
 
 ### BGM
-- [ ] Generative music layer in audio.js (no audio files): slow warm pad
+- [x] Generative music layer in audio.js (no audio files): slow warm pad
       chords (maj7 progression, triangle pads through a lowpass) + sparse
       music-box plucks on a pentatonic scale through a feedback delay
-- [ ] Runs on the bgm bus; default volume low; pauses with mute
+- [x] Runs on the bgm bus; default volume low; pauses with mute
 
 ### Verification
-- [ ] Menu shows over live drifting world after boot
-- [ ] Fly enters game, ESC pauses, settings sliders audible + persisted
-- [ ] Screenshots: menu, pause, settings
+- [x] Menu shows over live drifting world after boot
+- [x] Fly enters game, ESC pauses, settings sliders audible + persisted
+- [x] Screenshots: menu, pause, settings

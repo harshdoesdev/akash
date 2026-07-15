@@ -18,6 +18,7 @@ import { buildWorld } from './world.js';
 import { ChaseCamera } from './chaseCamera.js';
 import { PALETTE } from './palette.js';
 import { loadAssets } from './assets.js';
+import { createUI } from './ui.js';
 
 // Boot: every asset loads before the world builds or the loop starts —
 // nothing pops in late. The boot screen fades after the first real frame.
@@ -83,6 +84,7 @@ const dayNight = createDayNight({
 const fireflies = createFireflies(scene, terrain.heightAt);
 const dust = createDust(scene, terrain.heightAt);
 const windLeaves = createWindLeaves(scene, terrain.heightAt, world.colliders, scene.fog);
+const ui = createUI({ audio, seedStr });
 window.drone = drone; // dev: live tuning/inspection from the console
 window.renderer = renderer;
 window.surfaceAt = surfaceAt;
@@ -114,15 +116,32 @@ function applyPixelScale(p) {
 }
 applyPixelScale(pixelScale);
 
+// Main-menu cinematic: a slow drift around the spawn meadow — the live
+// world is the menu art.
+const ZERO_INPUT = { pitch: 0, roll: 0, yaw: 0, climb: 0, reset: false };
+let cineAngle = 0.6;
+function cinematicCamera(dt) {
+  cineAngle += dt * 0.035;
+  const r = 46;
+  const cx = Math.cos(cineAngle) * r;
+  const cz = Math.sin(cineAngle) * r;
+  const y = surfaceAt(cx, cz) + 16 + Math.sin(cineAngle * 2.3) * 2.5;
+  camera.position.set(cx, y, cz);
+  camera.lookAt(0, surfaceAt(0, 0) + 5, 0);
+}
+
 renderer.setAnimationLoop(() => {
   // Clamp dt so a backgrounded tab doesn't launch the drone into orbit.
   clock.update();
   const dt = Math.min(clock.getDelta(), 1 / 20);
   const time = clock.getElapsed();
 
-  const input = readInput();
+  // Menus: drone hovers unmanned, camera drifts. Paused keeps the chase cam.
+  const playing = ui.state === 'playing';
+  const input = playing ? readInput() : ZERO_INPUT;
   drone.update(dt, input);
-  chaseCam.update(dt, drone);
+  if (ui.cameraMode === 'chase') chaseCam.update(dt, drone);
+  else cinematicCamera(dt);
   grass.update(time, drone.position, drone.throttleVisual);
   sky.update(dt, drone.position);
   water.update(time, dt, {

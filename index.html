@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sora sanpo — 空さんぽ</title>
+    <title>akash — आकाश</title>
     <style>
       html, body {
         margin: 0;
@@ -13,9 +13,8 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       #app { position: fixed; inset: 0; }
-      #hud {
+      #hud, #controls {
         position: fixed;
-        top: 16px;
         left: 16px;
         color: #fff;
         font-size: 13px;
@@ -23,19 +22,134 @@
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
         user-select: none;
         pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.4s ease;
       }
-      #controls {
+      #hud { top: 16px; }
+      #controls { bottom: 16px; font-size: 12px; color: rgba(255, 255, 255, 0.75); }
+      body.in-game #hud, body.in-game #controls { opacity: 1; }
+
+      /* ---- Screen system: overlays crossfading over the live world ---- */
+      .screen {
         position: fixed;
-        bottom: 16px;
-        left: 16px;
-        color: rgba(255, 255, 255, 0.75);
-        font-size: 12px;
-        line-height: 1.7;
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-        user-select: none;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
         pointer-events: none;
+        transition: opacity 0.45s ease;
+        font-family: ui-rounded, "Hiragino Maru Gothic ProN", Quicksand, Avenir, sans-serif;
+        user-select: none;
       }
-      /* Boot screen: the game's own day-sky palette, gone in a breath. */
+      .screen.active { opacity: 1; pointer-events: auto; }
+
+      /* Soft shade so text sits on the live world without hiding it. */
+      .menu-shade {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse at 50% 45%, rgba(20, 40, 70, 0.0) 30%, rgba(20, 40, 70, 0.38) 100%),
+          linear-gradient(180deg, rgba(20, 40, 70, 0.25), rgba(20, 40, 70, 0) 30%);
+      }
+      .panel-inner { position: relative; text-align: center; color: #fff; }
+
+      .menu-kana {
+        font-size: 20px;
+        letter-spacing: 0.4em;
+        margin-left: 0.4em;
+        color: rgba(255, 255, 255, 0.9);
+        text-shadow: 0 2px 14px rgba(20, 50, 90, 0.6);
+        margin-bottom: 6px;
+      }
+      .menu-title {
+        font-size: 54px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        margin-left: 0.18em;
+        text-shadow: 0 3px 24px rgba(20, 50, 90, 0.65);
+      }
+      .menu-sub {
+        font-size: 13px;
+        letter-spacing: 0.3em;
+        margin-left: 0.3em;
+        color: rgba(255, 255, 255, 0.88);
+        margin-top: 6px;
+        margin-bottom: 34px;
+      }
+      /* Liquid glass: frosted translucent pills and cards over the live
+         world — light blur, hairline highlight, nothing heavy. */
+      .menu-buttons { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+      .menu-buttons button, .panel-buttons button {
+        font: inherit;
+        font-size: 15px;
+        letter-spacing: 0.22em;
+        text-indent: 0.22em;
+        color: #ffffff;
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
+        background: rgba(255, 255, 255, 0.22);
+        backdrop-filter: blur(14px) saturate(1.4);
+        -webkit-backdrop-filter: blur(14px) saturate(1.4);
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-top-color: rgba(255, 255, 255, 0.65);
+        border-radius: 99px;
+        padding: 11px 0;
+        width: 220px;
+        cursor: pointer;
+        box-shadow: 0 6px 24px rgba(20, 50, 90, 0.18);
+        transition: transform 0.15s ease, background 0.15s ease;
+      }
+      .menu-buttons button:hover, .panel-buttons button:hover {
+        background: rgba(255, 255, 255, 0.38);
+        transform: translateY(-1px);
+      }
+      .menu-seed {
+        margin-top: 26px;
+        font-size: 11px;
+        letter-spacing: 0.24em;
+        color: rgba(255, 255, 255, 0.7);
+      }
+
+      /* Pause + settings share a glass card. */
+      .panel-card {
+        position: relative;
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(22px) saturate(1.5);
+        -webkit-backdrop-filter: blur(22px) saturate(1.5);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        border-top-color: rgba(255, 255, 255, 0.6);
+        border-radius: 26px;
+        padding: 34px 44px;
+        min-width: 320px;
+        box-shadow: 0 12px 50px rgba(20, 50, 90, 0.22);
+        color: #ffffff;
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.35);
+        text-align: center;
+      }
+      .panel-title {
+        font-size: 20px;
+        letter-spacing: 0.3em;
+        text-indent: 0.3em;
+        margin-bottom: 24px;
+      }
+      .panel-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 14px;
+        font-size: 12px;
+        letter-spacing: 0.18em;
+      }
+      .slider-row label { width: 90px; text-align: right; }
+      .slider-row input[type="range"] {
+        flex: 1;
+        accent-color: #eaf6e2;
+      }
+
+      /* ---- Boot screen (asset preload) ---- */
       #boot {
         position: fixed;
         inset: 0;
@@ -51,9 +165,9 @@
       #boot.boot-done { opacity: 0; pointer-events: none; }
       #boot-inner { text-align: center; }
       #boot-kana {
-        font-size: 15px;
+        font-size: 16px;
         letter-spacing: 0.5em;
-        margin-left: 0.5em; /* recenter the letter-spaced kana */
+        margin-left: 0.5em;
         color: rgba(255, 255, 255, 0.85);
         margin-bottom: 8px;
       }
@@ -94,12 +208,57 @@
     <div id="app"></div>
     <div id="hud"></div>
     <div id="controls">
-      W/S forward/back &nbsp; A/D turn &nbsp; ←/→ strafe &nbsp; SPACE up &nbsp; SHIFT down &nbsp; R reset &nbsp; M sound &nbsp; N (hold) time
+      W/S forward/back &nbsp; A/D turn &nbsp; ←/→ strafe &nbsp; SPACE up &nbsp; SHIFT down &nbsp; R reset &nbsp; M sound &nbsp; N (hold) time &nbsp; ESC menu
     </div>
+
+    <div class="screen" data-screen="menu">
+      <div class="menu-shade"></div>
+      <div class="panel-inner">
+        <div class="menu-kana">आकाश</div>
+        <div class="menu-title">akash</div>
+        <div class="menu-sub">a sky stroll</div>
+        <div class="menu-buttons">
+          <button id="btn-fly">fly</button>
+          <button id="btn-settings">settings</button>
+        </div>
+        <div class="menu-seed" id="menu-seed"></div>
+      </div>
+    </div>
+
+    <div class="screen" data-screen="paused">
+      <div class="menu-shade"></div>
+      <div class="panel-inner">
+        <div class="panel-card">
+          <div class="panel-title">paused</div>
+          <div class="panel-buttons">
+            <button id="btn-resume">resume</button>
+            <button id="btn-pause-settings">settings</button>
+            <button id="btn-main-menu">main menu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen" data-screen="settings" id="screen-settings">
+      <div class="menu-shade"></div>
+      <div class="panel-inner">
+        <div class="panel-card">
+          <div class="panel-title">sound</div>
+          <div class="slider-row"><label>master</label><input type="range" min="0" max="100" data-bus="master" /></div>
+          <div class="slider-row"><label>drone</label><input type="range" min="0" max="100" data-bus="drone" /></div>
+          <div class="slider-row"><label>ambience</label><input type="range" min="0" max="100" data-bus="ambience" /></div>
+          <div class="slider-row"><label>music</label><input type="range" min="0" max="100" data-bus="bgm" /></div>
+          <div class="panel-buttons" style="margin-top: 20px;">
+            <button id="btn-settings-back">back</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="boot">
       <div id="boot-inner">
-        <div id="boot-kana">空さんぽ</div>
-        <div id="boot-title">sora sanpo</div>
+        <div id="boot-kana">आकाश</div>
+        <div id="boot-title">akash</div>
         <div id="boot-sub">warming up the meadow</div>
         <div id="boot-track"><div id="boot-fill"></div></div>
       </div>
