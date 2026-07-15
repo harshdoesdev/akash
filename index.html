@@ -35,6 +35,56 @@
         user-select: none;
         pointer-events: none;
       }
+      /* Boot screen: the game's own day-sky palette, gone in a breath. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, #2e6ac8 0%, #9fd2e8 58%, #d7e7cf 100%);
+        font-family: ui-rounded, "Hiragino Maru Gothic ProN", Quicksand, Avenir, sans-serif;
+        transition: opacity 0.9s ease;
+        user-select: none;
+      }
+      #boot.boot-done { opacity: 0; pointer-events: none; }
+      #boot-inner { text-align: center; animation: boot-float 3.4s ease-in-out infinite; }
+      @keyframes boot-float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-6px); }
+      }
+      #boot-title {
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        color: #ffffff;
+        text-shadow: 0 2px 18px rgba(46, 106, 200, 0.5);
+        margin-bottom: 10px;
+      }
+      #boot-sub {
+        font-size: 12px;
+        letter-spacing: 0.24em;
+        color: rgba(255, 255, 255, 0.88);
+        margin-bottom: 28px;
+      }
+      #boot-track {
+        width: 190px;
+        height: 4px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.35);
+        border-radius: 99px;
+        overflow: hidden;
+      }
+      #boot-fill {
+        width: 100%;
+        height: 100%;
+        background: #fff;
+        border-radius: 99px;
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.25s ease;
+      }
     </style>
   </head>
   <body>
@@ -42,6 +92,13 @@
     <div id="hud"></div>
     <div id="controls">
       W/S forward/back &nbsp; A/D turn &nbsp; ←/→ strafe &nbsp; SPACE up &nbsp; SHIFT down &nbsp; R reset &nbsp; M sound &nbsp; N (hold) time
+    </div>
+    <div id="boot">
+      <div id="boot-inner">
+        <div id="boot-title">dronedronego</div>
+        <div id="boot-sub">warming up the meadow</div>
+        <div id="boot-track"><div id="boot-fill"></div></div>
+      </div>
     </div>
     <script type="module" src="/src/main.js"></script>
   </body>

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { texture, ready } from './assets.js';
 
 // Arcade "angle mode" flight model (think DJI normal mode):
 // - tilt inputs set a target attitude, the drone eases toward it and
@@ -43,29 +44,23 @@ function buildDroneMesh() {
   const gray = toon(0x565e66);
 
   // Hand-painted texture atlas (public/drone-atlas.png), four 512px quadrants:
-  // cream TL, orange TR, charcoal BL, gray BR. Silently keeps flat colors if
-  // the file is missing.
-  new THREE.TextureLoader().load(
-    '/drone-atlas.png',
-    (atlas) => {
-      atlas.colorSpace = THREE.SRGBColorSpace;
-      const apply = (mat, ox, oy) => {
-        const t = atlas.clone();
-        t.repeat.set(0.5, 0.5);
-        t.offset.set(ox, oy);
-        t.needsUpdate = true;
-        mat.map = t;
-        mat.color.set(0xffffff); // the texture carries the color now
-        mat.needsUpdate = true;
-      };
-      apply(cream, 0, 0.5);
-      apply(orange, 0.5, 0.5);
-      apply(dark, 0, 0);
-      apply(gray, 0.5, 0);
-    },
-    undefined,
-    () => {}
-  );
+  // cream TL, orange TR, charcoal BL, gray BR. Preloaded by assets.js;
+  // keeps flat colors if the file is missing.
+  if (ready('droneAtlas')) {
+    const atlas = texture('droneAtlas');
+    const apply = (mat, ox, oy) => {
+      const t = atlas.clone();
+      t.repeat.set(0.5, 0.5);
+      t.offset.set(ox, oy);
+      t.needsUpdate = true;
+      mat.map = t;
+      mat.color.set(0xffffff); // the texture carries the color now
+    };
+    apply(cream, 0, 0.5);
+    apply(orange, 0.5, 0.5);
+    apply(dark, 0, 0);
+    apply(gray, 0.5, 0);
+  }
 
   const shadowed = (mesh) => {
     mesh.castShadow = true;

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { fbm } from './noise.js';
 import { PALETTE } from './palette.js';
+import { texture } from './assets.js';
 
 // Sky: our own hand-painted equirect panoramas (Codex-generated to the
 // game's palette) on an inverted sphere, crossfaded day / dawn / night by
@@ -118,13 +119,12 @@ const skyFragment = /* glsl */ `
 export function createSky(scene, sunDirection, worldSeed) {
   const horizon = new THREE.Color(PALETTE.horizonFog);
 
-  const loader = new THREE.TextureLoader();
-  const panorama = (url) => {
-    const t = loader.load(url);
-    t.colorSpace = THREE.SRGBColorSpace;
+  const panorama = (name) => {
+    const t = texture(name); // preloaded by assets.js
     t.wrapS = THREE.RepeatWrapping;
     t.minFilter = THREE.LinearFilter; // no mips: avoids the equirect seam line
     t.generateMipmaps = false;
+    t.needsUpdate = true;
     return t;
   };
 
@@ -134,9 +134,9 @@ export function createSky(scene, sunDirection, worldSeed) {
       vertexShader: skyVertex,
       fragmentShader: skyFragment,
       uniforms: {
-        uDay: { value: panorama('/sky-day.png') },
-        uDawn: { value: panorama('/sky-dawn.png') },
-        uNight: { value: panorama('/sky-night.png') },
+        uDay: { value: panorama('skyDay') },
+        uDawn: { value: panorama('skyDawn') },
+        uNight: { value: panorama('skyNight') },
         uDawnW: { value: 0 },
         uNightW: { value: 0 },
         uCloudTint: { value: new THREE.Color(1, 1, 1) },

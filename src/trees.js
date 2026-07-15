@@ -4,6 +4,7 @@ import { SUN_DIR } from './palette.js';
 import { makeRand } from './rng.js';
 import { GLOBAL_TINT } from './dayNight.js';
 import { distToPath, WATER_LEVEL } from './terrain.js';
+import { texture, ready } from './assets.js';
 
 // Ghibli forest, film-style. The skeleton is a recursive branching grower
 // in the spirit of the classic parametric tree models (Weber-Penn / space
@@ -203,14 +204,14 @@ export function createForest(scene, heightAt, worldSeed) {
   gradient.minFilter = THREE.NearestFilter;
   gradient.needsUpdate = true;
   const trunkMat = new THREE.MeshToonMaterial({ color: 0x8a6247, gradientMap: gradient });
-  new THREE.TextureLoader().load('/bark.png', (t) => {
-    t.colorSpace = THREE.SRGBColorSpace;
+  if (ready('bark')) {
+    const t = texture('bark');
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(1, 2);
+    t.needsUpdate = true;
     trunkMat.map = t;
     trunkMat.color.set(0xffffff);
-    trunkMat.needsUpdate = true;
-  }, undefined, () => {});
+  }
 
   const leafUniforms = {
     uTime: { value: 0 },
@@ -245,12 +246,12 @@ export function createForest(scene, heightAt, worldSeed) {
     defines: { CLUMP: 1 },
     side: THREE.DoubleSide,
   });
-  new THREE.TextureLoader().load('/leaves-atlas.png', (t) => {
-    t.colorSpace = THREE.SRGBColorSpace;
+  if (ready('leaves')) {
+    const t = texture('leaves');
     t.anisotropy = 4;
-    leafMat.uniforms.uMap.value = t;
-    leafMat.uniforms.uReady.value = 1;
-  }, undefined, () => {});
+    leafUniforms.uMap.value = t;
+    leafUniforms.uReady.value = 1;
+  }
 
   // Tree generator ---------------------------------------------------------
   const treeSpots = [];

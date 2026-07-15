@@ -17,6 +17,16 @@ import { createSky } from './sky.js';
 import { buildWorld } from './world.js';
 import { ChaseCamera } from './chaseCamera.js';
 import { PALETTE } from './palette.js';
+import { loadAssets } from './assets.js';
+
+// Boot: every asset loads before the world builds or the loop starts —
+// nothing pops in late. The boot screen fades after the first real frame.
+const bootEl = document.getElementById('boot');
+const bootFill = document.getElementById('boot-fill');
+await loadAssets((f) => {
+  bootFill.style.transform = `scaleX(${f})`;
+});
+let bootDismissed = false;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 // 1.75 max: retina 2x costs ~30% more fragments than the painterly style
@@ -166,4 +176,10 @@ renderer.setAnimationLoop(() => {
   }
 
   composer.render();
+
+  if (!bootDismissed) {
+    bootDismissed = true;
+    bootEl.classList.add('boot-done');
+    setTimeout(() => bootEl.remove(), 1000);
+  }
 });

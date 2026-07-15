@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLOBAL_TINT } from './dayNight.js';
+import { texture, ready } from './assets.js';
 
 // Ghibli wind gusts: a handful of invisible gust "streams" spawn at tree
 // canopies near the drone, drift downwind for a few seconds and die. Each
@@ -104,11 +105,10 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
     uFogNear: { value: fog.near },
     uFogFar: { value: fog.far },
   };
-  new THREE.TextureLoader().load('/leaves-atlas.png', (t) => {
-    t.colorSpace = THREE.SRGBColorSpace;
-    uniforms.uMap.value = t;
+  if (ready('leaves')) {
+    uniforms.uMap.value = texture('leaves');
     uniforms.uReady.value = 1;
-  }, undefined, () => {});
+  }
 
   const quad = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
