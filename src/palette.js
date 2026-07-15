@@ -3,9 +3,10 @@ import * as THREE from 'three';
 // One place for the film's palette. Sky-at-horizon and fog MUST stay the same
 // value — that identity is what dissolves the edge of the world.
 export const PALETTE = {
-  horizonFog: 0xd8e8d0, // pale warm haze: fog, sky horizon, terrain far-blend
-  skyMid: 0x9fd2e8,     // luminous pale cyan band above the horizon (Shinkai)
-  zenith: 0x2e6ac8,     // vivid azure overhead
+  // Matches the day sky panorama's horizon color (sampled from the center
+  // row of public/sky-day.png — resample if it's regenerated): fog, terrain
+  // far-blend, and ground skirt all dissolve into this pale haze.
+  horizonFog: 0xd7e7cf,
   sunlight: 0xffeec2,
   ridges: [0xa6c193, 0xbfd6b6, 0xd4e4cf], // aerial perspective, near → far
 };

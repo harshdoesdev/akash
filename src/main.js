@@ -60,7 +60,6 @@ const dayNight = createDayNight({
   sun: world.sun,
   hemi: world.hemi,
   skyUniforms: sky.skyUniforms,
-  cloudMat: sky.cloudMat,
   ridges: sky.ridgeMats,
   skirtMat: sky.skirtMat,
   terrainMat: terrain.mesh.material,
