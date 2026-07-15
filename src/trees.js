@@ -120,6 +120,12 @@ export function createForest(scene, heightAt, worldSeed) {
         // Leaves lie roughly tangent to their puff sphere, randomly twisted
         // and tilted — the volume look comes from the shared sphere normals.
         const h1 = hash1(dot(aPos, vec3(12.9898, 78.233, 37.719)));
+        // Dithered thinning: past ~110m cards drop out one by one (stable
+        // per-card random — no popping) and survivors grow to keep the
+        // canopy mass. Slashes distant fill cost the fps meter can't see.
+        const thin = smoothstep(110.0, 290.0, dist);
+        const keep = fract(h1.mul(7.77)).greaterThan(thin.mul(0.6)).select(float(1.0), float(0.0));
+        vis = vis.mul(keep).mul(thin.mul(0.45).add(1.0));
         const h2 = hash1(dot(aPos, vec3(39.3467, 11.135, 83.155)));
         const t1 = normalize(cross(aNormal, vec3(0.577, 0.577, 0.577)));
         const t2 = cross(aNormal, t1);
