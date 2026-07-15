@@ -257,10 +257,19 @@ export function createForest(scene, heightAt, worldSeed) {
     const chunk = chunkAt(x, z);
     const origin = new THREE.Vector3(x, y, z);
 
-    const tall = !forcedH && rand() < 0.25;
-    const h = forcedH || (tall ? 15 + rand() * 8 : 11 + rand() * 7);
+    // Archetypes: a few dead snags (bare trunks), some gnarled old-growth
+    // (crooked, thicker, sparse canopy, many dead limbs), the rest young.
+    const roll = forcedH ? 1 : rand();
+    const deadTree = roll < 0.035;
+    const oldTree = !deadTree && roll < 0.11;
+    const gnarl = deadTree ? 1.8 : oldTree ? 1.45 : 1;
+    const tall = !forcedH && !deadTree && !oldTree && rand() < 0.25;
+    const h = (forcedH || (tall ? 15 + rand() * 8 : 11 + rand() * 7))
+      * (oldTree ? 1.2 : deadTree ? 0.8 : 1);
     const spread = tall ? 0.72 : 1;
-    const blossom = !forcedH && rand() < 0.07 ? 1 : 0;
+    const blossom = !forcedH && !deadTree && !oldTree && rand() < 0.07 ? 1 : 0;
+    const deadChance = oldTree ? 0.24 : 0.08;
+    const leafMul = oldTree ? 0.7 : 1;
     const treeJitter = rand();
     const swayPhase = rand() * Math.PI * 2;
     const MAXD = forcedH ? 5 : 4;
@@ -289,8 +298,8 @@ export function createForest(scene, heightAt, worldSeed) {
       let p = pos.clone();
       const d = dir.clone();
       for (let s = 0; s < SEGS; s++) {
-        d.x += (rand() - 0.5) * (depth === 0 ? 0.16 : 0.34);
-        d.z += (rand() - 0.5) * (depth === 0 ? 0.16 : 0.34);
+        d.x += (rand() - 0.5) * (depth === 0 ? 0.16 : 0.34) * gnarl;
+        d.z += (rand() - 0.5) * (depth === 0 ? 0.16 : 0.34) * gnarl;
         // Tropism ramps up along the branch: flat run, then tip lift.
         d.y += lift * (0.4 + 1.2 * (s / SEGS));
         d.normalize();
@@ -337,14 +346,17 @@ export function createForest(scene, heightAt, worldSeed) {
         const axis = perp.clone().applyAxisAngle(d, az);
         const kd = d.clone().applyAxisAngle(axis, ang).normalize();
         const kLen = len * (0.62 + rand() * 0.16) * (k === 0 ? 1.05 : 0.85);
-        const kDead = dead || (depth >= 1 && rand() < 0.08);
+        const kDead = dead || (depth >= 1 && rand() < deadChance);
         const kLift = k === 0 ? 0.09 : 0.02 + rand() * 0.035;
         grow(p, kd, kLen, rChild * (0.85 + rand() * 0.3), depth + 1, kDead, kLift);
       }
     };
 
-    const trunkDir = new THREE.Vector3((rand() - 0.5) * 0.24, 1, (rand() - 0.5) * 0.24).normalize();
-    grow(new THREE.Vector3(0, 0, 0), trunkDir, h * 0.42, h * 0.017, 0, false, 0.05);
+    const trunkDir = new THREE.Vector3(
+      (rand() - 0.5) * 0.24 * gnarl, 1, (rand() - 0.5) * 0.24 * gnarl
+    ).normalize();
+    grow(new THREE.Vector3(0, 0, 0), trunkDir, h * 0.42,
+      h * (oldTree || deadTree ? 0.024 : 0.017), 0, deadTree, 0.05);
 
     // Canopy: cluster the leafy tips into puffs, then dress each puff with
     // a dark core inside and a shell of small leaf sprays.
@@ -364,7 +376,7 @@ export function createForest(scene, heightAt, worldSeed) {
       const c = q.c.clone().add(origin);
       c.y += pr * 0.15; // puffs sit on top of their twigs
 
-      const count = Math.min(400, Math.max(30, Math.round(pr * pr * LEAF_K)));
+      const count = Math.min(400, Math.max(30, Math.round(pr * pr * LEAF_K * leafMul)));
       for (let i = 0; i < count; i++) {
         const az = rand() * Math.PI * 2;
         const el = Math.asin(rand() * 2 - 1) * 0.78 + 0.16; // upward bias
