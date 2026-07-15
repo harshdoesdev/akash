@@ -125,13 +125,13 @@ export function createAudio() {
   let birdTimer = 1.5;
 
   // ---- BGM
-  // Primary: /bgm.mp3 — "First Light Particles" by Yoiyami (CC0, from
+  // Primary: bgm.mp3 — "First Light Particles" by Yoiyami (CC0, from
   // OpenGameArt), looped. Fallback if the file is missing: the generative
   // pad-and-pluck layer below.
   let bgmBuffer = null;
   let bgmSource = null;
   let useGenerative = false;
-  fetch('/bgm.mp3')
+  fetch(`${import.meta.env.BASE_URL}bgm.mp3`)
     .then((r) => { if (!r.ok) throw new Error('no bgm'); return r.arrayBuffer(); })
     .then((buf) => ctx.decodeAudioData(buf))
     .then((decoded) => {

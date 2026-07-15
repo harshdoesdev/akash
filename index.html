@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>akash — आकाश</title>
+    <title>akash alpha — आकाश</title>
+    <meta name="description" content="Akash alpha build: a tranquil drone flight through a painterly sky meadow." />
+    <link rel="icon" type="image/png" href="./branding/akash-icon.png" />
     <style>
       html, body {
         margin: 0;
@@ -54,6 +56,19 @@
           linear-gradient(180deg, rgba(20, 40, 70, 0.25), rgba(20, 40, 70, 0) 30%);
       }
       .panel-inner { position: relative; text-align: center; color: #fff; }
+      .brand-lockup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 18px;
+      }
+      .brand-wordmark {
+        width: min(520px, 78vw);
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 10px 24px rgba(15, 45, 90, 0.28));
+      }
 
       .menu-kana {
         font-size: 20px;
@@ -76,7 +91,19 @@
         margin-left: 0.3em;
         color: rgba(255, 255, 255, 0.88);
         margin-top: 6px;
-        margin-bottom: 34px;
+        margin-bottom: 32px;
+      }
+      .alpha-pill {
+        position: fixed;
+        left: 50%;
+        bottom: 22px;
+        transform: translateX(-50%);
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        text-indent: 0.2em;
+        color: rgba(255, 247, 226, 0.74);
+        text-transform: uppercase;
+        text-shadow: 0 1px 8px rgba(15, 45, 90, 0.28);
       }
       /* Liquid glass: frosted translucent pills and cards over the live
          world — light blur, hairline highlight, nothing heavy. */
@@ -160,6 +187,19 @@
       }
       #boot.boot-done { opacity: 0; pointer-events: none; }
       #boot-inner { text-align: center; }
+      #boot-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        margin-bottom: 14px;
+      }
+      #boot-wordmark {
+        width: min(320px, 66vw);
+        height: auto;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 18px rgba(46, 106, 200, 0.26));
+      }
       #boot-kana {
         font-size: 16px;
         letter-spacing: 0.5em;
@@ -180,6 +220,15 @@
         letter-spacing: 0.24em;
         color: rgba(255, 255, 255, 0.88);
         margin-bottom: 28px;
+      }
+      #boot-alpha {
+        font-size: 10px;
+        letter-spacing: 0.22em;
+        text-indent: 0.22em;
+        color: rgba(255, 247, 226, 0.76);
+        text-transform: uppercase;
+        text-shadow: 0 1px 10px rgba(46, 106, 200, 0.25);
+        margin-bottom: 22px;
       }
       #boot-track {
         width: 190px;
@@ -210,8 +259,9 @@
     <div class="screen" data-screen="menu">
       <div class="menu-shade"></div>
       <div class="panel-inner">
-        <div class="menu-kana">आकाश</div>
-        <div class="menu-title">akash</div>
+        <div class="brand-lockup">
+          <img class="brand-wordmark" src="./branding/akash-logo-text.png" alt="Akash logo" />
+        </div>
         <div class="menu-sub">a sky stroll</div>
         <div class="menu-buttons">
           <button id="btn-fly">fly</button>
@@ -219,6 +269,7 @@
         </div>
         <div class="menu-seed" id="menu-seed"></div>
       </div>
+      <div class="alpha-pill">alpha build</div>
     </div>
 
     <div class="screen" data-screen="paused">
@@ -254,9 +305,11 @@
 
     <div id="boot">
       <div id="boot-inner">
-        <div id="boot-kana">आकाश</div>
-        <div id="boot-title">akash</div>
+        <div id="boot-brand">
+          <img id="boot-wordmark" src="./branding/akash-logo-text.png" alt="Akash logo" />
+        </div>
         <div id="boot-sub">warming up the meadow</div>
+        <div id="boot-alpha">alpha build</div>
         <div id="boot-track"><div id="boot-fill"></div></div>
       </div>
     </div>

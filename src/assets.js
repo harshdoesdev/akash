@@ -5,12 +5,12 @@ import * as THREE from 'three';
 // only starts once everything has settled, so nothing pops in late.
 // Modules grab ready textures synchronously via texture()/ready().
 const MANIFEST = {
-  droneAtlas: '/drone-atlas.png',
-  bark: '/bark.png',
-  leaves: '/leaves-atlas.png',
-  skyDay: '/sky-day.png',
-  skyDawn: '/sky-dawn.png',
-  skyNight: '/sky-night.png',
+  droneAtlas: `${import.meta.env.BASE_URL}drone-atlas.png`,
+  bark: `${import.meta.env.BASE_URL}bark.png`,
+  leaves: `${import.meta.env.BASE_URL}leaves-atlas.png`,
+  skyDay: `${import.meta.env.BASE_URL}sky-day.png`,
+  skyDawn: `${import.meta.env.BASE_URL}sky-dawn.png`,
+  skyNight: `${import.meta.env.BASE_URL}sky-night.png`,
 };
 
 const cache = {};
