@@ -21,7 +21,8 @@ const SHEEP_HERDS = 2;
 const DEER_GROUPS = 2;
 
 // DEBUG: cluster every animal near the spawn point so they're easy to find.
-const FAUNA_NEAR_SPAWN = true;
+// Costs ~450 draw calls when they're all in view — keep off unless needed.
+const FAUNA_NEAR_SPAWN = false;
 
 export function createCritters(scene, heightAt, colliders, worldSeed) {
   const rand = makeRand(worldSeed ^ 0x0c211e5);

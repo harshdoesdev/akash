@@ -18,7 +18,9 @@ import { ChaseCamera } from './chaseCamera.js';
 import { PALETTE } from './palette.js';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// 1.75 max: retina 2x costs ~30% more fragments than the painterly style
+// can justify; the adaptive stepper below still trades further down.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -90,7 +92,7 @@ let fpsValue = 0;
 
 // Adaptive resolution: if the frame rate sags, step the pixel ratio down —
 // the painterly style hides the softness far better than it hides stutter.
-let pixelScale = Math.min(window.devicePixelRatio, 2);
+let pixelScale = Math.min(window.devicePixelRatio, 1.75);
 function applyPixelScale(p) {
   pixelScale = p;
   renderer.setPixelRatio(p);

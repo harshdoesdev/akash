@@ -24,7 +24,7 @@ import { distToPath, WATER_LEVEL } from './terrain.js';
 // — the whole forest is ~35 draw calls.
 
 const HALF_WORLD = 800;
-const GRID = 4;
+const GRID = 8; // finer chunks = tighter frustum culling of leaf clouds
 const CHUNK = (HALF_WORLD * 2) / GRID;
 
 const leafVertex = /* glsl */ `
@@ -243,7 +243,7 @@ export function createForest(scene, heightAt, worldSeed) {
   const treeSpots = [];
   const colliders = [];
   const UP = new THREE.Vector3(0, 1, 0);
-  const LEAF_K = 80; // spray cards per m² of puff shell (the density dial)
+  const LEAF_K = 60; // spray cards per m² of puff shell (the density dial)
 
   function addTree(x, z, forcedH) {
     const y = heightAt(x, z);
@@ -385,7 +385,7 @@ export function createForest(scene, heightAt, worldSeed) {
         chunk.leaves.push(
           px, py, pz,
           n.x, n.y, n.z,
-          0.85 + rand() * 0.4,                          // spray card ≈ 5-9 small leaves
+          0.95 + rand() * 0.45,                         // spray card ≈ 5-9 small leaves
           THREE.MathUtils.clamp(0.5 + (treeJitter - 0.5) * 0.7 + (rand() - 0.5) * 0.62, 0, 1),
           ao,
           rand() * Math.PI * 2,
