@@ -17,7 +17,7 @@ const TUNING = {
   drag: 0.55,             // horizontal drag coefficient (1/s)
   climbRate: 9.0,         // max vertical speed (m/s)
   climbResponse: 4.0,     // how fast vertical speed chases target (1/s)
-  ceiling: 150,           // max altitude — climb fades out approaching it
+  ceiling: 35,            // max height above ground — climb fades out approaching it
   groundClearance: 0.14,  // rest on the skids (rail bottoms ≈ -0.137)
 };
 
@@ -277,18 +277,18 @@ export class Drone {
     const groundY = this.heightAt(this.mesh.position.x, this.mesh.position.z) + TUNING.groundClearance;
     const grounded = this.mesh.position.y <= groundY + 0.001;
     let targetVy = input.climb * TUNING.climbRate;
-    // Thin air: climb authority fades over the last 30m below the ceiling.
-    const ceilT = (this.mesh.position.y - (TUNING.ceiling - 30)) / 30;
+    // Ceiling is height above ground. Climb authority fades over the last
+    // 8m below it; drifting over a cliff edge sinks the drone back down
+    // gently instead of teleport-clamping.
+    const agl = this.mesh.position.y - groundY + TUNING.groundClearance;
+    const ceilT = (agl - (TUNING.ceiling - 8)) / 8;
     if (targetVy > 0 && ceilT > 0) targetVy *= Math.max(0, 1 - ceilT);
+    if (agl > TUNING.ceiling) {
+      targetVy = Math.min(targetVy, -(agl - TUNING.ceiling) * 1.2);
+    }
     this.velocity.y += (targetVy - this.velocity.y) * ease(TUNING.climbResponse);
 
     this.mesh.position.addScaledVector(this.velocity, dt);
-
-    // Hard cap just in case momentum carries past the fade.
-    if (this.mesh.position.y > TUNING.ceiling) {
-      this.mesh.position.y = TUNING.ceiling;
-      if (this.velocity.y > 0) this.velocity.y = 0;
-    }
 
     // Ground: land softly, don't slide while parked.
     const newGroundY = this.heightAt(this.mesh.position.x, this.mesh.position.z) + TUNING.groundClearance;
