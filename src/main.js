@@ -116,6 +116,21 @@ function applyPixelScale(p) {
 }
 applyPixelScale(pixelScale);
 
+// WebGPU never back-pressures the JS loop, so the fps number stays 60 while
+// the GPU quietly runs over budget. Probe the truth: time how long queued
+// GPU work takes to drain. High latency = GPU-bound = drop resolution.
+const gpuProbe = { pending: false, lag: 0, frames: 0 };
+function probeGpu() {
+  const device = renderer.backend?.device;
+  if (!device || gpuProbe.pending) return;
+  gpuProbe.pending = true;
+  const t0 = performance.now();
+  device.queue.onSubmittedWorkDone().then(() => {
+    gpuProbe.lag = performance.now() - t0;
+    gpuProbe.pending = false;
+  });
+}
+
 // Main-menu cinematic: a slow drift around the spawn meadow — the live
 // world is the menu art.
 const ZERO_INPUT = { pitch: 0, roll: 0, yaw: 0, climb: 0, reset: false };
@@ -179,13 +194,22 @@ renderer.setAnimationLoop(() => {
 
   fpsFrames++;
   fpsTime += dt;
+  gpuProbe.frames++;
+  if (gpuProbe.frames >= 20) {
+    gpuProbe.frames = 0;
+    probeGpu();
+  }
   if (fpsTime >= 0.5) {
     fpsValue = Math.round(fpsFrames / fpsTime);
     fpsFrames = 0;
     fpsTime = 0;
-    // Give the page a few seconds to settle, then trade pixels for frames.
-    if (clock.getElapsed() > 4 && fpsValue > 0 && fpsValue < 45 && pixelScale > 1.0) {
+    // Give the page a few seconds to settle, then trade pixels for frames —
+    // triggered by real fps drops OR by GPU queue latency (the honest signal
+    // on WebGPU, where rAF keeps ticking 60 while the GPU falls behind).
+    if (clock.getElapsed() > 4 && pixelScale > 1.0
+      && ((fpsValue > 0 && fpsValue < 45) || gpuProbe.lag > 26)) {
       applyPixelScale(Math.max(1.0, pixelScale - 0.25));
+      gpuProbe.lag = 0; // re-measure at the new resolution before stepping again
     }
   }
 
@@ -194,7 +218,7 @@ renderer.setAnimationLoop(() => {
     hudTimer = 0;
     const kmh = (drone.speed * 3.6).toFixed(0);
     const agl = drone.position.y - surfaceAt(drone.position.x, drone.position.z);
-    hud.textContent = `${kmh} km/h  ·  ${agl.toFixed(1)} m  ·  ${fpsValue} fps`;
+    hud.textContent = `${kmh} km/h  ·  ${agl.toFixed(1)} m  ·  ${fpsValue} fps  ·  gpu ${gpuProbe.lag.toFixed(0)}ms`;
   }
 
   composer.render();

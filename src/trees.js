@@ -116,7 +116,7 @@ export function createForest(scene, heightAt, worldSeed) {
         // Near LOD: detailed spray cards shrink away in the crossfade band.
         // Cards almost touching the camera also shrink — kills the worst
         // full-screen overdraw when flying through a canopy.
-        vis = float(1.0).sub(smoothstep(240.0, 320.0, dist)).mul(smoothstep(1.2, 3.5, dist));
+        vis = float(1.0).sub(smoothstep(240.0, 320.0, dist)).mul(smoothstep(1.5, 5.0, dist));
         // Leaves lie roughly tangent to their puff sphere, randomly twisted
         // and tilted — the volume look comes from the shared sphere normals.
         const h1 = hash1(dot(aPos, vec3(12.9898, 78.233, 37.719)));
@@ -133,8 +133,13 @@ export function createForest(scene, heightAt, worldSeed) {
         right = t1.mul(cos(ang)).add(t2.mul(sin(ang)));
         up2 = normalize(cross(aNormal, right).add(aNormal.mul(h2.sub(0.5).mul(1.1))));
       }
+      // Cap each card's PROJECTED size: near the camera a full-size card can
+      // cover half the screen, and with alpha-discard there is no early-z —
+      // a canopy at point-blank becomes ~100x overdraw (the 200ms GPU spikes).
+      // Bounding cards to a few degrees of screen caps the worst case.
+      const size = clump ? aData.x : distance(aPos, cameraPosition).mul(0.14).add(0.05).min(aData.x);
       const wp = aPos.add(
-        right.mul(positionGeometry.x).add(up2.mul(positionGeometry.y)).mul(aData.x).mul(vis)
+        right.mul(positionGeometry.x).add(up2.mul(positionGeometry.y)).mul(size).mul(vis)
       ).toVar();
 
       // Wind: whole-canopy lean plus a tiny per-leaf flutter along the normal.
