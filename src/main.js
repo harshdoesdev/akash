@@ -124,7 +124,7 @@ renderer.setAnimationLoop(() => {
   });
   windOverlay.update(time);
   world.update(time);
-  windLeaves.update(dt, time, drone.position);
+  windLeaves.update(dt, time, drone.position, drone.velocity, drone.throttleVisual);
   dayNight.update(dt);
   fireflies.update(dt, time, drone.position, dayNight.nightFactor);
   dust.update(dt, {

@@ -5,9 +5,12 @@ import { GLOBAL_TINT } from './dayNight.js';
 // canopies near the drone, drift downwind for a few seconds and die. Each
 // stream carries a comet-trail of small leaves that swirl around it in a
 // loose helix, tumbling as they go. All motion is in the vertex shader —
-// the CPU only moves five anchor points per frame.
+// the CPU only moves a few anchor points per frame.
+// The LAST stream is the drone's prop wash: hover into a canopy and a
+// vortex of torn-off leaves whirls around the drone, scaled by throttle.
 
-const STREAMS = 5;
+const GUSTS = 5;
+const STREAMS = GUSTS + 1; // + the prop-wash vortex
 const LEAVES_PER = 60;
 
 const vertexShader = /* glsl */ `
@@ -125,7 +128,7 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
   mesh.frustumCulled = false; // streams roam; one small mesh, always cheap
   scene.add(mesh);
 
-  const streams = Array.from({ length: STREAMS }, (_, i) => ({
+  const streams = Array.from({ length: GUSTS }, (_, i) => ({
     src: new THREE.Vector3(),
     dir: new THREE.Vector3(1, 0, 0),
     speed: 8,
@@ -158,11 +161,12 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
   }
 
   const anchor = new THREE.Vector3();
+  let washStrength = 0;
   return {
-    update(dt, time, dronePos) {
+    update(dt, time, dronePos, droneVel, throttle) {
       uniforms.uTime.value = time;
       uniforms.uFogFar.value = fog.far;
-      for (let i = 0; i < STREAMS; i++) {
+      for (let i = 0; i < GUSTS; i++) {
         const s = streams[i];
         s.age += dt;
         if (s.age > s.dur) respawn(s, dronePos);
@@ -175,6 +179,23 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
         uniforms.uStreams.value[i].set(anchor.x, anchor.y, anchor.z, strength);
         uniforms.uStreamDirs.value[i].set(s.dir.x, s.dir.y, s.dir.z, 0);
       }
+
+      // Prop wash: buzzing a canopy tears leaves loose around the drone.
+      let inCanopy = 0;
+      let nd = Infinity;
+      let near = null;
+      for (const c of treeColliders) {
+        const dd = Math.hypot(c.x - dronePos.x, c.z - dronePos.z);
+        if (dd < nd) { nd = dd; near = c; }
+      }
+      if (near && nd < 7.5 && dronePos.y > near.top - 3 && dronePos.y < near.top + 13) {
+        // Hover wash alone tears leaves; throttle whips the vortex bigger.
+        inCanopy = Math.min(1.3, 0.5 + throttle * 0.8);
+      }
+      // Snap on fast, linger a moment as the last leaves settle.
+      washStrength += (inCanopy - washStrength) * Math.min(1, dt * (inCanopy > washStrength ? 6 : 1.4));
+      uniforms.uStreams.value[GUSTS].set(dronePos.x, dronePos.y - 0.9, dronePos.z, washStrength);
+      uniforms.uStreamDirs.value[GUSTS].set(droneVel.x * 0.06, 0, droneVel.z * 0.06, 0);
     },
   };
 }
