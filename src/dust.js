@@ -1,6 +1,6 @@
-import * as THREE from 'three';
 import { distToPath, WATER_LEVEL } from './terrain.js';
 import { GLOBAL_TINT } from './dayNight.js';
+import { createParticleCloud, makeDotTexture } from './particles.js';
 
 // Prop-wash dust: tan puffs billow out when the drone hovers low over bare
 // ground — beach sand or the dirt path. Heavy drag so the cloud hangs and
@@ -8,38 +8,23 @@ import { GLOBAL_TINT } from './dayNight.js';
 const COUNT = 120;
 
 export function createDust(scene, heightAt) {
-  const dot = document.createElement('canvas');
-  dot.width = dot.height = 48;
-  const ctx = dot.getContext('2d');
-  const g = ctx.createRadialGradient(24, 24, 0, 24, 24, 24);
-  g.addColorStop(0, 'rgba(224,204,164,0.55)');
-  g.addColorStop(0.6, 'rgba(224,204,164,0.28)');
-  g.addColorStop(1, 'rgba(224,204,164,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 48, 48);
-
-  const positions = new Float32Array(COUNT * 3);
-  positions.fill(-9999);
+  const cloud = createParticleCloud(scene, {
+    count: COUNT,
+    map: makeDotTexture([
+      [0, 'rgba(224,204,164,0.55)'],
+      [0.6, 'rgba(224,204,164,0.28)'],
+      [1, 'rgba(224,204,164,0)'],
+    ]),
+    size: 0.55,
+    colorRef: GLOBAL_TINT.value, // dust dims with the world
+  });
+  const positions = cloud.positions;
   const velocities = new Float32Array(COUNT * 3);
   const life = new Float32Array(COUNT);
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 0.55,
-    map: new THREE.CanvasTexture(dot),
-    transparent: true,
-    depthWrite: false,
-  });
-  const points = new THREE.Points(geo, mat);
-  points.frustumCulled = false;
-  scene.add(points);
   let cursor = 0;
 
   return {
     update(dt, { x, z, y, throttle }) {
-      // Day/night: dust dims with the world.
-      mat.color.copy(GLOBAL_TINT.value);
-
       const h = heightAt(x, z);
       const beach = h > WATER_LEVEL + 0.05 && h < WATER_LEVEL + 2.4;
       const path = distToPath(x, z) < 2.6 && h > WATER_LEVEL + 0.8;
@@ -80,7 +65,7 @@ export function createDust(scene, heightAt) {
         if (positions[i * 3 + 1] < ground) positions[i * 3 + 1] = ground; // roll along
         if (life[i] <= 0) positions[i * 3 + 1] = -9999;
       }
-      geo.attributes.position.needsUpdate = true;
+      cloud.commit();
     },
   };
 }

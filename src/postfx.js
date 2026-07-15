@@ -6,7 +6,8 @@ import { pass, mix, vec3, dot, float, smoothstep, distance, vec2, uv } from 'thr
 // soft vignette pulling the eye to center. Runs in linear space; the
 // PostProcessing output transform handles the final sRGB conversion.
 export function createPostFX(renderer, scene, camera) {
-  const post = new THREE.PostProcessing(renderer);
+  const Pipeline = THREE.RenderPipeline || THREE.PostProcessing;
+  const post = new Pipeline(renderer);
   const scenePass = pass(scene, camera);
 
   let col = scenePass.rgb;

@@ -6,6 +6,7 @@ import {
 } from 'three/tsl';
 import { TERRAIN_SIZE, WATER_LEVEL } from './terrain.js';
 import { GLOBAL_TINT } from './dayNight.js';
+import { createParticleCloud, makeDotTexture } from './particles.js';
 
 // Ghibli lakes: one still water plane at WATER_LEVEL — wherever the terrain
 // dips below it, a lake appears. The shader samples the terrain heightmap to
@@ -109,36 +110,20 @@ export function createWater(scene, heightTexture, fog) {
 
   // Spray: white droplets kicked up when skimming low over the surface.
   const SPRAY = 160;
-  const positions = new Float32Array(SPRAY * 3);
-  positions.fill(-9999);
+  const cloud = createParticleCloud(scene, {
+    count: SPRAY,
+    map: makeDotTexture([
+      [0, 'rgba(255,255,255,1)'],
+      [0.6, 'rgba(255,255,255,0.7)'],
+      [1, 'rgba(255,255,255,0)'],
+    ]),
+    size: 0.22,
+    color: 0xeafaf2,
+    opacity: 0.85,
+  });
+  const positions = cloud.positions;
   const velocities = new Float32Array(SPRAY * 3);
   const life = new Float32Array(SPRAY);
-  const sprayGeo = new THREE.BufferGeometry();
-  sprayGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  // Soft round droplet sprite (default points are hard squares).
-  const dotCanvas = document.createElement('canvas');
-  dotCanvas.width = dotCanvas.height = 32;
-  const dctx = dotCanvas.getContext('2d');
-  const dg = dctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  dg.addColorStop(0, 'rgba(255,255,255,1)');
-  dg.addColorStop(0.6, 'rgba(255,255,255,0.7)');
-  dg.addColorStop(1, 'rgba(255,255,255,0)');
-  dctx.fillStyle = dg;
-  dctx.fillRect(0, 0, 32, 32);
-
-  const spray = new THREE.Points(
-    sprayGeo,
-    new THREE.PointsMaterial({
-      color: 0xeafaf2,
-      size: 0.22,
-      map: new THREE.CanvasTexture(dotCanvas),
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    })
-  );
-  spray.frustumCulled = false;
-  scene.add(spray);
   let cursor = 0;
   let washSmooth = 0;
 
@@ -191,7 +176,7 @@ export function createWater(scene, heightTexture, fog) {
           life[i] = 0;
         }
       }
-      sprayGeo.attributes.position.needsUpdate = true;
+      cloud.commit();
     },
   };
 }

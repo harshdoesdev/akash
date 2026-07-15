@@ -98,7 +98,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-const clock = new THREE.Clock();
+const clock = new THREE.Timer();
 let hudTimer = 0;
 let fpsFrames = 0;
 let fpsTime = 0;
@@ -116,8 +116,9 @@ applyPixelScale(pixelScale);
 
 renderer.setAnimationLoop(() => {
   // Clamp dt so a backgrounded tab doesn't launch the drone into orbit.
+  clock.update();
   const dt = Math.min(clock.getDelta(), 1 / 20);
-  const time = clock.elapsedTime;
+  const time = clock.getElapsed();
 
   const input = readInput();
   drone.update(dt, input);
@@ -163,7 +164,7 @@ renderer.setAnimationLoop(() => {
     fpsFrames = 0;
     fpsTime = 0;
     // Give the page a few seconds to settle, then trade pixels for frames.
-    if (clock.elapsedTime > 4 && fpsValue > 0 && fpsValue < 45 && pixelScale > 1.0) {
+    if (clock.getElapsed() > 4 && fpsValue > 0 && fpsValue < 45 && pixelScale > 1.0) {
       applyPixelScale(Math.max(1.0, pixelScale - 0.25));
     }
   }

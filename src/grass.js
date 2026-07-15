@@ -150,23 +150,25 @@ export function createGrass(scene, heightTexture, colorTexture, fog, worldSeed) 
     const vH = varying(vHeight);
     const vWorldXZ = varying(wrapped);
 
-    // Root = exact ground color (slightly darkened for depth), tip = brighter
-    // and warmer; a passing gust pushes tips toward sunlit chartreuse.
-    const tip = vH.mul(vH);
-    const col = vRoot.mul(mix(0.80, 1.38, tip)).toVar();
-    col.addAssign(vec3(0.055, 0.05, 0.005).mul(tip));
-    col.addAssign(vRoot.mul(vSweep).mul(tip).mul(0.45));
-    col.mulAssign(vTint.mul(0.14).add(0.93));
+    grassMat.colorNode = Fn(() => {
+      // Root = exact ground color (slightly darkened for depth), tip =
+      // brighter and warmer; a gust pushes tips toward sunlit chartreuse.
+      const tip = vH.mul(vH);
+      const col = vRoot.mul(mix(0.80, 1.38, tip)).toVar();
+      col.addAssign(vec3(0.055, 0.05, 0.005).mul(tip));
+      col.addAssign(vRoot.mul(vSweep).mul(tip).mul(0.45));
+      col.mulAssign(vTint.mul(0.14).add(0.93));
 
-    // Same cloud shadows as the terrain overlay, so blades don't glow
-    // inside a shadow patch (constants must match windOverlay.js).
-    const c1 = sin(dot(vWorldXZ, vec2(0.0060, 0.0042)).sub(uTime.mul(0.10)));
-    const c2 = sin(dot(vWorldXZ, vec2(-0.0035, 0.0065)).sub(uTime.mul(0.07)).add(2.9));
-    const cloud = smoothstep(0.35, 1.1, c1.mul(0.7).add(c2.mul(0.5)));
-    const shaded = mix(col, col.mul(vec3(0.72, 0.80, 0.88)), cloud.mul(0.5)).mul(uTint);
+      // Same cloud shadows as the terrain overlay, so blades don't glow
+      // inside a shadow patch (constants must match windOverlay.js).
+      const c1 = sin(dot(vWorldXZ, vec2(0.0060, 0.0042)).sub(uTime.mul(0.10)));
+      const c2 = sin(dot(vWorldXZ, vec2(-0.0035, 0.0065)).sub(uTime.mul(0.07)).add(2.9));
+      const cloud = smoothstep(0.35, 1.1, c1.mul(0.7).add(c2.mul(0.5)));
+      const shaded = mix(col, col.mul(vec3(0.72, 0.80, 0.88)), cloud.mul(0.5)).mul(uTint);
 
-    const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
-    grassMat.colorNode = mix(shaded, uFogColor, fogF);
+      const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+      return mix(shaded, uFogColor, fogF);
+    })();
   }
 
   const rand = makeRand(worldSeed ^ 0x51ab7);
@@ -206,11 +208,13 @@ export function createGrass(scene, heightTexture, colorTexture, fog, worldSeed) 
     })();
 
     const vKind = varying(aKind);
-    const col = mix(vec3(0.93, 0.94, 0.86), vec3(0.99, 0.80, 0.35), step(0.62, vKind)).toVar();
-    col.assign(mix(col, vec3(0.96, 0.63, 0.68), step(0.85, vKind)));
-    col.mulAssign(uTint);
-    const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
-    flowerMat.colorNode = mix(col, uFogColor, fogF);
+    flowerMat.colorNode = Fn(() => {
+      const col = mix(vec3(0.93, 0.94, 0.86), vec3(0.99, 0.80, 0.35), step(0.62, vKind)).toVar();
+      col.assign(mix(col, vec3(0.96, 0.63, 0.68), step(0.85, vKind)));
+      col.mulAssign(uTint);
+      const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+      return mix(col, uFogColor, fogF);
+    })();
   }
 
   const flowerMesh = new THREE.Mesh(
