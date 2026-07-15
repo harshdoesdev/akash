@@ -108,7 +108,7 @@ export function createForest(scene, heightAt, worldSeed) {
       let vis, right, up2;
       if (clump) {
         // Far LOD: camera-facing painted clumps fade in past the leaf range.
-        vis = smoothstep(120.0, 190.0, dist);
+        vis = smoothstep(210.0, 290.0, dist);
         const fwd = normalize(cameraPosition.sub(aPos));
         right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
         up2 = cross(fwd, right);
@@ -116,7 +116,7 @@ export function createForest(scene, heightAt, worldSeed) {
         // Near LOD: detailed spray cards shrink away in the crossfade band.
         // Cards almost touching the camera also shrink — kills the worst
         // full-screen overdraw when flying through a canopy.
-        vis = float(1.0).sub(smoothstep(150.0, 220.0, dist)).mul(smoothstep(1.2, 3.5, dist));
+        vis = float(1.0).sub(smoothstep(240.0, 320.0, dist)).mul(smoothstep(1.2, 3.5, dist));
         // Leaves lie roughly tangent to their puff sphere, randomly twisted
         // and tilted — the volume look comes from the shared sphere normals.
         const h1 = hash1(dot(aPos, vec3(12.9898, 78.233, 37.719)));
