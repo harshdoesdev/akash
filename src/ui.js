@@ -59,8 +59,20 @@ export function createUI({ audio, seedStr }) {
     });
   }
 
-  // ESC walks the state graph.
+  // Fullscreen: settings button + F anywhere.
+  const fsBtn = document.getElementById('btn-fullscreen');
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => {});
+  };
+  fsBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', () => {
+    fsBtn.textContent = document.fullscreenElement ? 'exit fullscreen' : 'fullscreen';
+  });
+
+  // ESC walks the state graph; F toggles fullscreen.
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyF') { toggleFullscreen(); return; }
     if (e.code !== 'Escape') return;
     if (api.state === 'playing') setState('paused');
     else if (api.state === 'paused') setState('playing');
