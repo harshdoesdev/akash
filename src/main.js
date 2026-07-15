@@ -170,6 +170,7 @@ renderer.setAnimationLoop(() => {
     speed: drone.speed,
     throttle: drone.throttleVisual,
     agl: drone.position.y - surfaceAt(drone.position.x, drone.position.z),
+    flying: playing, // menus: motor silent, wind calm
   });
 
   // Shadow camera follows the drone so shadows stay crisp anywhere on the map.

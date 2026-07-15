@@ -222,17 +222,22 @@ export function createAudio() {
     start,
     setVolume,
     getVolume,
-    update(dt, { speed, throttle, agl }) {
+    update(dt, { speed, throttle, agl, flying = true }) {
       if (!started || muted) return;
 
-      // Wind builds with airspeed and altitude.
-      const windTarget = Math.min(0.4, 0.05 + speed * 0.007 + agl * 0.001);
-      lerp(windGain.gain, windTarget, dt, 2);
-      lerp(windFilter.frequency, 420 + speed * 28, dt, 2);
+      // On menus the drone is unmanned: motor fades out entirely and the
+      // wind settles to its calm base. Ambience + music keep playing.
+      const spd = flying ? speed : 0;
+      const thr = flying ? throttle : 0;
 
-      // Motor whine follows throttle.
-      lerp(motorGain.gain, 0.02 + throttle * 0.075, dt, 5);
-      const f = 88 + throttle * 75 + speed * 1.1;
+      // Wind builds with airspeed and altitude.
+      const windTarget = Math.min(0.4, 0.05 + spd * 0.007 + agl * 0.001);
+      lerp(windGain.gain, windTarget, dt, 2);
+      lerp(windFilter.frequency, 420 + spd * 28, dt, 2);
+
+      // Motor whine follows throttle — silent when not flying.
+      lerp(motorGain.gain, flying ? 0.02 + thr * 0.075 : 0, dt, 5);
+      const f = 88 + thr * 75 + spd * 1.1;
       lerp(oscA.frequency, f, dt, 5);
       lerp(oscB.frequency, f * 2.03, dt, 5);
 
