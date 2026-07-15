@@ -1,4 +1,9 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {
+  attribute, texture as textureNode, uniform, varying, positionGeometry, positionView,
+  cameraPosition, uv, vec2, vec3, float, color, dot, sin, cos, smoothstep, mix,
+  distance, clamp, fract, floor, normalize, cross, atan, Fn, Discard,
+} from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SUN_DIR } from './palette.js';
 import { makeRand } from './rng.js';
@@ -27,162 +32,6 @@ import { texture, ready } from './assets.js';
 const HALF_WORLD = 800;
 const GRID = 8; // finer chunks = tighter frustum culling of leaf clouds
 const CHUNK = (HALF_WORLD * 2) / GRID;
-
-const leafVertex = /* glsl */ `
-  attribute vec3 aPos;    // leaf center, world space
-  attribute vec3 aNormal; // puff-sphere normal — the shading normal
-  attribute vec4 aData;   // size, colorJitter, ao, flutterPhase
-  attribute vec3 aMisc;   // swayPhase, swayWeight, blossom
-  uniform float uTime;
-  uniform vec4 uWash; // drone xyz + wash strength
-  uniform vec3 uSunDir;
-  uniform vec3 uShadow;
-  uniform vec3 uMid;
-  uniform vec3 uLight;
-  uniform vec3 uGlow;
-  uniform vec3 uShadowB;
-  uniform vec3 uMidB;
-  uniform vec3 uLightB;
-  uniform vec3 uGlowB;
-  varying vec3 vColor;
-  varying vec2 vUv;
-  varying float vFogDepth;
-  varying float vVariant;
-  varying float vTone;
-  varying float vBlossom;
-
-  float hash(float n) { return fract(sin(n) * 43758.5453); }
-
-  void main() {
-    vUv = uv;
-    vVariant = floor(hash(dot(aPos, vec3(3.1717, 9.0313, 5.7171))) * 3.999);
-    float dist = distance(aPos, cameraPosition);
-#ifdef CLUMP
-    // Far LOD: camera-facing painted clumps fade in past the leaf range.
-    float vis = smoothstep(120.0, 190.0, dist);
-    vec3 fwd = normalize(cameraPosition - aPos);
-    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
-    vec3 up2 = cross(fwd, right);
-#else
-    // Near LOD: detailed spray cards shrink away in the crossfade band.
-    // Cards almost touching the camera also shrink — kills the worst
-    // full-screen overdraw when flying through a canopy.
-    float vis = (1.0 - smoothstep(150.0, 220.0, dist)) * smoothstep(1.2, 3.5, dist);
-    // Leaves lie roughly tangent to their puff sphere (like sprays hugging
-    // the canopy surface), randomly twisted and tilted — full coverage from
-    // outside, and the volume look comes from the shared sphere normals.
-    float h1 = hash(dot(aPos, vec3(12.9898, 78.233, 37.719)));
-    float h2 = hash(dot(aPos, vec3(39.3467, 11.135, 83.155)));
-    vec3 t1 = normalize(cross(aNormal, vec3(0.577, 0.577, 0.577)));
-    vec3 t2 = cross(aNormal, t1);
-    float ang = h1 * 6.28318;
-    vec3 right = t1 * cos(ang) + t2 * sin(ang);
-    vec3 up2 = normalize(cross(aNormal, right) + aNormal * (h2 - 0.5) * 1.1);
-#endif
-    vec3 wp = aPos + (right * position.x + up2 * position.y) * aData.x * vis;
-
-    // Wind: whole-canopy lean plus a tiny per-leaf flutter along the normal.
-    float sway = sin(uTime * 0.8 + aMisc.x) * aMisc.y;
-    wp.x += sway;
-    wp.z += sway * 0.6;
-    wp += aNormal * (sin(uTime * 2.1 + aData.w) * 0.05);
-#ifndef CLUMP
-    // Prop wash: leaves near the hovering drone rustle and stir.
-    float wash = uWash.w * (1.0 - smoothstep(2.5, 8.0, distance(aPos, uWash.xyz)));
-    if (wash > 0.001) {
-      wp += aNormal * (sin(uTime * 13.0 + aData.w * 7.0) * 0.13 * wash);
-      wp.x += sin(uTime * 10.0 + aData.w * 11.0) * 0.1 * wash;
-      wp.z += cos(uTime * 9.0 + aData.w * 5.0) * 0.1 * wash;
-    }
-#endif
-
-    // One flat tone per leaf: banded ramp over the sphere normal's light,
-    // pushed down by ambient occlusion (interior / low canopy) and nudged
-    // per leaf so neighbours never share an identical tone.
-    float ndl = dot(aNormal, uSunDir) * 0.5 + 0.5;
-    float t = clamp(ndl - aData.z * 0.55 + (aData.y - 0.5) * 0.34, 0.0, 1.0);
-    vBlossom = aMisc.z;
-#ifdef CLUMP
-    vTone = t;      // shading finishes in the fragment, across the card
-    vColor = vec3(1.0);
-#else
-    float b1 = smoothstep(0.30, 0.42, t);
-    float b2 = smoothstep(0.58, 0.70, t);
-    float b3 = smoothstep(0.85, 0.93, t);
-    vec3 green = mix(mix(mix(uShadow, uMid, b1), uLight, b2), uGlow, b3);
-    vec3 pink = mix(mix(mix(uShadowB, uMidB, b1), uLightB, b2), uGlowB, b3);
-    vColor = mix(green, pink, aMisc.z);
-    vTone = 0.0;
-#endif
-
-    vec4 mv = viewMatrix * vec4(wp, 1.0);
-    vFogDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const leafFragment = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uReady;
-  uniform vec3 uTint;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  uniform vec3 uShadow;
-  uniform vec3 uMid;
-  uniform vec3 uLight;
-  uniform vec3 uGlow;
-  uniform vec3 uShadowB;
-  uniform vec3 uMidB;
-  uniform vec3 uLightB;
-  uniform vec3 uGlowB;
-  varying vec3 vColor;
-  varying vec2 vUv;
-  varying float vFogDepth;
-  varying float vVariant;
-  varying float vTone;
-  varying float vBlossom;
-
-  void main() {
-    vec3 col;
-#ifdef CLUMP
-    // One whole shaded puff painted inside the card: lobed silhouette,
-    // sunlit top rolling into blue-teal base — no overlapping discs.
-    vec2 q = (vUv - 0.5) * 2.0;
-    q.y *= 1.3; // wider than tall
-    float a = atan(q.y, q.x);
-    float wob = sin(a * 5.0 + vVariant * 6.28318) * 0.1
-              + sin(a * 9.0 + vVariant * 2.7) * 0.05;
-    float r2 = dot(q, q);
-    if (r2 > 1.0 - wob) discard;
-    float t = clamp(vTone + vUv.y * 0.55 - 0.25 - r2 * 0.12, 0.0, 1.0);
-    float b1 = smoothstep(0.30, 0.44, t);
-    float b2 = smoothstep(0.58, 0.72, t);
-    float b3 = smoothstep(0.85, 0.95, t);
-    vec3 green = mix(mix(mix(uShadow, uMid, b1), uLight, b2), uGlow, b3);
-    vec3 pink = mix(mix(mix(uShadowB, uMidB, b1), uLightB, b2), uGlowB, b3);
-    col = mix(green, pink, vBlossom);
-#else
-    if (uReady > 0.5) {
-      // Hand-painted leaf spray from the 2x2 atlas, tinted by the ramp.
-      vec2 cell = vec2(mod(vVariant, 2.0), floor(vVariant * 0.5)) * 0.5;
-      vec4 tex = texture2D(uMap, cell + vUv * 0.5);
-      if (tex.a < 0.5) discard;
-      col = tex.rgb * vColor * 1.25;
-    } else {
-      // Fallback while the atlas loads: plain oval dab.
-      vec2 p = (vUv - 0.5) * 2.0;
-      p.y *= 1.12 - 0.18 * p.y;
-      if (dot(p, p) > 1.0) discard;
-      col = vColor;
-    }
-#endif
-    col *= uTint;
-    float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
-    #include <colorspace_fragment>
-  }
-`;
 
 export function createForest(scene, heightAt, worldSeed) {
   const rand = makeRand(worldSeed ^ 0x7a3e51);
@@ -213,45 +62,135 @@ export function createForest(scene, heightAt, worldSeed) {
     trunkMat.color.set(0xffffff);
   }
 
-  const leafUniforms = {
-    uTime: { value: 0 },
-    uWash: { value: new THREE.Vector4(0, -9999, 0, 0) },
-    uMap: { value: null },
-    uReady: { value: 0 },
-    uSunDir: { value: SUN_DIR.clone() },
-    // Reference ramp: blue-teal shadow → forest green → lime → pale sun.
-    uShadow: { value: new THREE.Color(0x35597f) },
-    uMid: { value: new THREE.Color(0x4a8a50) },
-    uLight: { value: new THREE.Color(0x8ec45f) },
-    uGlow: { value: new THREE.Color(0xe9f09e) },
-    uShadowB: { value: new THREE.Color(0x9c5f74) },
-    uMidB: { value: new THREE.Color(0xcf8ba0) },
-    uLightB: { value: new THREE.Color(0xefb9c8) },
-    uGlowB: { value: new THREE.Color(0xfadbe4) },
-    uTint: GLOBAL_TINT,
-    uFogColor: { value: fog.color },
-    uFogNear: { value: fog.near },
-    uFogFar: { value: fog.far },
+  // Shared uniform nodes (one set drives both LOD materials).
+  const uTime = uniform(0);
+  const uWash = uniform(new THREE.Vector4(0, -9999, 0, 0));
+  const uSunDir = uniform(SUN_DIR.clone());
+  const uTint = uniform(GLOBAL_TINT.value);
+  const uFogColor = uniform(fog.color);
+  const uFogNear = uniform(fog.near);
+  const uFogFar = uniform(fog.far);
+  // Reference ramp: blue-teal shadow → forest green → lime → pale sun.
+  const RAMP = {
+    shadow: color(0x35597f),
+    mid: color(0x4a8a50),
+    light: color(0x8ec45f),
+    glow: color(0xe9f09e),
+    shadowB: color(0x9c5f74),
+    midB: color(0xcf8ba0),
+    lightB: color(0xefb9c8),
+    glowB: color(0xfadbe4),
   };
-  const leafMat = new THREE.ShaderMaterial({
-    vertexShader: leafVertex,
-    fragmentShader: leafFragment,
-    uniforms: leafUniforms, // shared with the clump material
-    side: THREE.DoubleSide,
-  });
-  const clumpMat = new THREE.ShaderMaterial({
-    vertexShader: leafVertex,
-    fragmentShader: leafFragment,
-    uniforms: leafUniforms,
-    defines: { CLUMP: 1 },
-    side: THREE.DoubleSide,
-  });
-  if (ready('leaves')) {
-    const t = texture('leaves');
-    t.anisotropy = 4;
-    leafUniforms.uMap.value = t;
-    leafUniforms.uReady.value = 1;
-  }
+  const ramp = (t, blossomF) => {
+    const b1 = smoothstep(0.30, 0.42, t);
+    const b2 = smoothstep(0.58, 0.70, t);
+    const b3 = smoothstep(0.85, 0.93, t);
+    const green = mix(mix(mix(RAMP.shadow, RAMP.mid, b1), RAMP.light, b2), RAMP.glow, b3);
+    const pink = mix(mix(mix(RAMP.shadowB, RAMP.midB, b1), RAMP.lightB, b2), RAMP.glowB, b3);
+    return mix(green, pink, blossomF);
+  };
+  const hash1 = Fn(([n]) => fract(sin(n).mul(43758.5453)));
+
+  const leavesTex = ready('leaves') ? texture('leaves') : null;
+  if (leavesTex) leavesTex.anisotropy = 4;
+
+  const makeCardMaterial = (clump) => {
+    const mat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: false });
+    const aPos = attribute('aPos', 'vec3');
+    const aNormal = attribute('aNormal', 'vec3');
+    const aData = attribute('aData', 'vec4');
+    const aMisc = attribute('aMisc', 'vec3');
+
+    const dist = distance(aPos, cameraPosition);
+    const uvC = uv();
+
+    mat.positionNode = Fn(() => {
+      let vis, right, up2;
+      if (clump) {
+        // Far LOD: camera-facing painted clumps fade in past the leaf range.
+        vis = smoothstep(120.0, 190.0, dist);
+        const fwd = normalize(cameraPosition.sub(aPos));
+        right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
+        up2 = cross(fwd, right);
+      } else {
+        // Near LOD: detailed spray cards shrink away in the crossfade band.
+        // Cards almost touching the camera also shrink — kills the worst
+        // full-screen overdraw when flying through a canopy.
+        vis = float(1.0).sub(smoothstep(150.0, 220.0, dist)).mul(smoothstep(1.2, 3.5, dist));
+        // Leaves lie roughly tangent to their puff sphere, randomly twisted
+        // and tilted — the volume look comes from the shared sphere normals.
+        const h1 = hash1(dot(aPos, vec3(12.9898, 78.233, 37.719)));
+        const h2 = hash1(dot(aPos, vec3(39.3467, 11.135, 83.155)));
+        const t1 = normalize(cross(aNormal, vec3(0.577, 0.577, 0.577)));
+        const t2 = cross(aNormal, t1);
+        const ang = h1.mul(6.28318);
+        right = t1.mul(cos(ang)).add(t2.mul(sin(ang)));
+        up2 = normalize(cross(aNormal, right).add(aNormal.mul(h2.sub(0.5).mul(1.1))));
+      }
+      const wp = aPos.add(
+        right.mul(positionGeometry.x).add(up2.mul(positionGeometry.y)).mul(aData.x).mul(vis)
+      ).toVar();
+
+      // Wind: whole-canopy lean plus a tiny per-leaf flutter along the normal.
+      const sway = sin(uTime.mul(0.8).add(aMisc.x)).mul(aMisc.y);
+      wp.x.addAssign(sway);
+      wp.z.addAssign(sway.mul(0.6));
+      wp.addAssign(aNormal.mul(sin(uTime.mul(2.1).add(aData.w)).mul(0.05)));
+      if (!clump) {
+        // Prop wash: leaves near the hovering drone rustle and stir.
+        const wash = uWash.w.mul(float(1.0).sub(smoothstep(2.5, 8.0, distance(aPos, uWash.xyz))));
+        wp.addAssign(aNormal.mul(sin(uTime.mul(13.0).add(aData.w.mul(7.0))).mul(0.13).mul(wash)));
+        wp.x.addAssign(sin(uTime.mul(10.0).add(aData.w.mul(11.0))).mul(0.1).mul(wash));
+        wp.z.addAssign(cos(uTime.mul(9.0).add(aData.w.mul(5.0))).mul(0.1).mul(wash));
+      }
+      return wp;
+    })();
+
+    // One flat tone per card: banded ramp over the sphere normal's light,
+    // pushed down by ambient occlusion and nudged per leaf.
+    const ndl = dot(aNormal, uSunDir).mul(0.5).add(0.5);
+    const tone = clamp(ndl.sub(aData.z.mul(0.55)).add(aData.y.sub(0.5).mul(0.34)), 0.0, 1.0);
+    const vVariant = varying(floor(hash1(dot(aPos, vec3(3.1717, 9.0313, 5.7171))).mul(3.999)));
+    const vBlossom = varying(aMisc.z);
+    const vTone = varying(tone);
+    const vColor = varying(ramp(tone, aMisc.z));
+
+    mat.colorNode = Fn(() => {
+      const col = vec3(0).toVar();
+      if (clump) {
+        // One whole shaded puff painted inside the card: lobed silhouette,
+        // sunlit top rolling into blue-teal base — no overlapping discs.
+        const q = uvC.sub(0.5).mul(2.0).mul(vec2(1.0, 1.3)).toVar();
+        const a = atan(q.y, q.x);
+        const wob = sin(a.mul(5.0).add(vVariant.mul(6.28318))).mul(0.1)
+          .add(sin(a.mul(9.0).add(vVariant.mul(2.7))).mul(0.05));
+        const r2 = dot(q, q);
+        Discard(r2.greaterThan(float(1.0).sub(wob)));
+        const t = clamp(vTone.add(uvC.y.mul(0.55)).sub(0.25).sub(r2.mul(0.12)), 0.0, 1.0);
+        col.assign(ramp(t, vBlossom));
+      } else if (leavesTex) {
+        // Hand-painted leaf spray from the 2x2 atlas, tinted by the ramp.
+        const cell = vec2(vVariant.mod(2.0), floor(vVariant.mul(0.5))).mul(0.5);
+        const tex = textureNode(leavesTex, cell.add(uvC.mul(0.5)));
+        Discard(tex.a.lessThan(0.5));
+        col.assign(tex.rgb.mul(vColor).mul(1.25));
+      } else {
+        // Fallback if the atlas is missing: plain oval dab.
+        const p = uvC.sub(0.5).mul(2.0).toVar();
+        p.y.mulAssign(float(1.12).sub(p.y.mul(0.18)));
+        Discard(dot(p, p).greaterThan(1.0));
+        col.assign(vColor);
+      }
+      col.mulAssign(uTint);
+      const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+      return mix(col, uFogColor, fogF);
+    })();
+    return mat;
+  };
+
+  const leafMat = makeCardMaterial(false);
+  const clumpMat = makeCardMaterial(true);
+  const leafUniforms = { uTime, uWash, uFogFar }; // for update()
 
   // Tree generator ---------------------------------------------------------
   const treeSpots = [];
@@ -526,6 +465,7 @@ export function createForest(scene, heightAt, worldSeed) {
     geo.setAttribute('aNormal', new THREE.InstancedBufferAttribute(aNormal, 3));
     geo.setAttribute('aData', new THREE.InstancedBufferAttribute(aData, 4));
     geo.setAttribute('aMisc', new THREE.InstancedBufferAttribute(aMisc, 3));
+    geo.instanceCount = n; // WebGPU uses this literally (default is Infinity)
     geo.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
     geo.boundingSphere.radius += 4; // cards poke past their centers
     const mesh = new THREE.Mesh(geo, mat);

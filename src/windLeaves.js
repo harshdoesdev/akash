@@ -1,11 +1,17 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {
+  attribute, texture as textureNode, uniform, uniformArray, varying,
+  positionGeometry, positionView, cameraPosition, uv,
+  vec2, vec3, float, int, dot, sin, cos, smoothstep, mix, fract, floor,
+  normalize, cross, Fn, Discard, mat2,
+} from 'three/tsl';
 import { GLOBAL_TINT } from './dayNight.js';
 import { texture, ready } from './assets.js';
 
 // Ghibli wind gusts: a handful of invisible gust "streams" spawn at tree
 // canopies near the drone, drift downwind for a few seconds and die. Each
 // stream carries a comet-trail of small leaves that swirl around it in a
-// loose helix, tumbling as they go. All motion is in the vertex shader —
+// loose helix, tumbling as they go. All motion is in the vertex stage —
 // the CPU only moves a few anchor points per frame.
 // The LAST stream is the drone's prop wash: hover into a canopy and a
 // vortex of torn-off leaves whirls around the drone, scaled by throttle.
@@ -14,101 +20,75 @@ const GUSTS = 5;
 const STREAMS = GUSTS + 1; // + the prop-wash vortex
 const LEAVES_PER = 60;
 
-const vertexShader = /* glsl */ `
-  attribute float aStream;
-  attribute vec4 aData; // phase, radius, size, jitter
-  uniform vec4 uStreams[${STREAMS}];    // xyz anchor, w strength
-  uniform vec4 uStreamDirs[${STREAMS}]; // xyz travel dir, w blossom
-  uniform float uTime;
-  varying vec2 vUv;
-  varying float vJitter;
-  varying float vFogDepth;
-  varying float vBlossom;
+export function createWindLeaves(scene, heightAt, treeColliders, fog) {
+  const uTime = uniform(0);
+  const uStreams = uniformArray(
+    Array.from({ length: STREAMS }, () => new THREE.Vector4(0, -9999, 0, 0))
+  );
+  const uStreamDirs = uniformArray(
+    Array.from({ length: STREAMS }, () => new THREE.Vector4(1, 0, 0, 0))
+  );
+  const uTint = uniform(GLOBAL_TINT.value);
+  const uFogColor = uniform(fog.color);
+  const uFogNear = uniform(fog.near);
+  const uFogFar = uniform(fog.far);
 
-  void main() {
-    vUv = uv;
-    vJitter = aData.w;
-    vec4 s = uStreams[int(aStream + 0.5)];
-    vec4 sd = uStreamDirs[int(aStream + 0.5)];
-    vec3 dir = sd.xyz;
-    vBlossom = sd.w;
-    float ph = aData.x;
+  const leavesTex = ready('leaves') ? texture('leaves') : null;
 
+  const mat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: false });
+
+  const aStream = attribute('aStream', 'float');
+  const aData = attribute('aData', 'vec4'); // phase, radius, size, jitter
+  const idx = int(aStream.add(0.5));
+  const s = uStreams.element(idx);
+  const sd = uStreamDirs.element(idx);
+  const ph = aData.x;
+
+  mat.positionNode = Fn(() => {
     // Trail back along the travel direction, swirl around the axis.
-    vec3 p = s.xyz - dir * fract(ph * 7.31) * 11.0;
-    float rad = aData.y * (0.55 + 0.45 * sin(uTime * 0.9 + ph * 5.0));
-    float ang = uTime * (2.0 + fract(ph * 3.3) * 1.6) + ph * 6.28318;
-    p.x += cos(ang) * rad;
-    p.z += sin(ang) * rad;
-    p.y += sin(ang * 0.7 + ph * 9.0) * rad * 0.55 + fract(ph * 3.7) * 2.4;
+    const p = s.xyz.sub(sd.xyz.mul(fract(ph.mul(7.31)).mul(11.0))).toVar();
+    const rad = aData.y.mul(sin(uTime.mul(0.9).add(ph.mul(5.0))).mul(0.45).add(0.55));
+    const ang = uTime.mul(fract(ph.mul(3.3)).mul(1.6).add(2.0)).add(ph.mul(6.28318));
+    p.x.addAssign(cos(ang).mul(rad));
+    p.z.addAssign(sin(ang).mul(rad));
+    p.y.addAssign(sin(ang.mul(0.7).add(ph.mul(9.0))).mul(rad).mul(0.55)
+      .add(fract(ph.mul(3.7)).mul(2.4)));
 
     // Tumbling billboard.
-    vec3 fwd = normalize(cameraPosition - p);
-    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
-    vec3 up2 = cross(fwd, right);
-    float spin = uTime * (3.0 + fract(ph * 13.7) * 4.0) + ph * 20.0;
-    vec2 c = mat2(cos(spin), -sin(spin), sin(spin), cos(spin)) * position.xy;
-    vec3 wp = p + (right * c.x + up2 * c.y) * aData.z * s.w;
+    const fwd = normalize(cameraPosition.sub(p));
+    const right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
+    const up2 = cross(fwd, right);
+    const spin = uTime.mul(fract(ph.mul(13.7)).mul(4.0).add(3.0)).add(ph.mul(20.0));
+    const cx = positionGeometry.x.mul(cos(spin)).sub(positionGeometry.y.mul(sin(spin)));
+    const cy = positionGeometry.x.mul(sin(spin)).add(positionGeometry.y.mul(cos(spin)));
+    return p.add(right.mul(cx).add(up2.mul(cy)).mul(aData.z).mul(s.w));
+  })();
 
-    vec4 mv = viewMatrix * vec4(wp, 1.0);
-    vFogDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
+  const vJitter = varying(aData.w);
+  const vBlossom = varying(sd.w);
 
-const fragmentShader = /* glsl */ `
-  uniform sampler2D uMap;
-  uniform float uReady;
-  uniform vec3 uTint;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying vec2 vUv;
-  varying float vJitter;
-  varying float vFogDepth;
-  varying float vBlossom;
-
-  void main() {
+  mat.colorNode = Fn(() => {
     // Same tones as the canopy ramps, so torn leaves match their tree —
     // greens normally, petal pinks off a blossom tree.
-    vec3 green = mix(vec3(0.29, 0.54, 0.31), vec3(0.56, 0.77, 0.37), vJitter);
-    vec3 pink = mix(vec3(0.81, 0.55, 0.63), vec3(0.94, 0.73, 0.78), vJitter);
-    vec3 base = mix(green, pink, vBlossom);
-    vec3 col;
-    if (uReady > 0.5) {
-      float variant = floor(vJitter * 3.999);
-      vec2 cell = vec2(mod(variant, 2.0), floor(variant * 0.5)) * 0.5;
-      vec4 tex = texture2D(uMap, cell + vUv * 0.5);
-      if (tex.a < 0.5) discard;
-      col = tex.rgb * base * 1.3;
+    const green = mix(vec3(0.29, 0.54, 0.31), vec3(0.56, 0.77, 0.37), vJitter);
+    const pink = mix(vec3(0.81, 0.55, 0.63), vec3(0.94, 0.73, 0.78), vJitter);
+    const base = mix(green, pink, vBlossom);
+    const col = vec3(0).toVar();
+    if (leavesTex) {
+      const variant = floor(vJitter.mul(3.999));
+      const cell = vec2(variant.mod(2.0), floor(variant.mul(0.5))).mul(0.5);
+      const tex = textureNode(leavesTex, cell.add(uv().mul(0.5)));
+      Discard(tex.a.lessThan(0.5));
+      col.assign(tex.rgb.mul(base).mul(1.3));
     } else {
-      vec2 p = (vUv - 0.5) * 2.0;
-      if (dot(p, p) > 1.0) discard;
-      col = base;
+      const p = uv().sub(0.5).mul(2.0);
+      Discard(dot(p, p).greaterThan(1.0));
+      col.assign(base);
     }
-    col *= uTint;
-    float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
-    #include <colorspace_fragment>
-  }
-`;
-
-export function createWindLeaves(scene, heightAt, treeColliders, fog) {
-  const uniforms = {
-    uTime: { value: 0 },
-    uMap: { value: null },
-    uReady: { value: 0 },
-    uStreams: { value: Array.from({ length: STREAMS }, () => new THREE.Vector4(0, -9999, 0, 0)) },
-    uStreamDirs: { value: Array.from({ length: STREAMS }, () => new THREE.Vector4(1, 0, 0, 0)) },
-    uTint: GLOBAL_TINT,
-    uFogColor: { value: fog.color },
-    uFogNear: { value: fog.near },
-    uFogFar: { value: fog.far },
-  };
-  if (ready('leaves')) {
-    uniforms.uMap.value = texture('leaves');
-    uniforms.uReady.value = 1;
-  }
+    col.mulAssign(uTint);
+    const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+    return mix(col, uFogColor, fogF);
+  })();
 
   const quad = new THREE.PlaneGeometry(1, 1);
   const geo = new THREE.InstancedBufferGeometry();
@@ -116,23 +96,19 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
   geo.setAttribute('position', quad.attributes.position);
   geo.setAttribute('uv', quad.attributes.uv);
   const N = STREAMS * LEAVES_PER;
-  const aStream = new Float32Array(N);
-  const aData = new Float32Array(N * 4);
+  const aStreamArr = new Float32Array(N);
+  const aDataArr = new Float32Array(N * 4);
   for (let i = 0; i < N; i++) {
-    aStream[i] = Math.floor(i / LEAVES_PER);
-    aData[i * 4] = Math.random();               // phase
-    aData[i * 4 + 1] = 0.8 + Math.random() * 3.4; // swirl radius
-    aData[i * 4 + 2] = 0.16 + Math.random() * 0.14; // size
-    aData[i * 4 + 3] = Math.random();           // jitter
+    aStreamArr[i] = Math.floor(i / LEAVES_PER);
+    aDataArr[i * 4] = Math.random();                // phase
+    aDataArr[i * 4 + 1] = 0.8 + Math.random() * 3.4; // swirl radius
+    aDataArr[i * 4 + 2] = 0.16 + Math.random() * 0.14; // size
+    aDataArr[i * 4 + 3] = Math.random();            // jitter
   }
-  geo.setAttribute('aStream', new THREE.InstancedBufferAttribute(aStream, 1));
-  geo.setAttribute('aData', new THREE.InstancedBufferAttribute(aData, 4));
-  const mesh = new THREE.Mesh(geo, new THREE.ShaderMaterial({
-    vertexShader,
-    fragmentShader,
-    uniforms,
-    side: THREE.DoubleSide,
-  }));
+  geo.setAttribute('aStream', new THREE.InstancedBufferAttribute(aStreamArr, 1));
+  geo.setAttribute('aData', new THREE.InstancedBufferAttribute(aDataArr, 4));
+  geo.instanceCount = N;
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false; // streams roam; one small mesh, always cheap
   scene.add(mesh);
 
@@ -142,15 +118,15 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
     speed: 8,
     age: -2 - i * 2.5, // stagger the first gusts
     dur: 10,
-    started: false,
+    blossom: 0,
   }));
 
-  function respawn(s, dronePos) {
+  function respawn(st, dronePos) {
     // Blow off a leafy tree canopy near the drone when one is around.
     let sx = dronePos.x + (Math.random() - 0.5) * 220;
     let sz = dronePos.z + (Math.random() - 0.5) * 220;
     let sy = null;
-    s.blossom = 0;
+    st.blossom = 0;
     for (let tries = 0; tries < 24; tries++) {
       const c = treeColliders[Math.floor(Math.random() * treeColliders.length)];
       if (!c) break;
@@ -158,16 +134,16 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
         sx = c.x;
         sz = c.z;
         sy = c.top + 1.5; // just above the fork, inside the canopy
-        s.blossom = c.blossom || 0;
+        st.blossom = c.blossom || 0;
         break;
       }
     }
-    s.src.set(sx, sy ?? heightAt(sx, sz) + 5, sz);
+    st.src.set(sx, sy ?? heightAt(sx, sz) + 5, sz);
     const a = Math.random() * Math.PI * 2;
-    s.dir.set(Math.cos(a), 0, Math.sin(a));
-    s.speed = 6 + Math.random() * 5;
-    s.dur = 7 + Math.random() * 6;
-    s.age = -Math.random() * 3; // pause between gusts
+    st.dir.set(Math.cos(a), 0, Math.sin(a));
+    st.speed = 6 + Math.random() * 5;
+    st.dur = 7 + Math.random() * 6;
+    st.age = -Math.random() * 3; // pause between gusts
   }
 
   const anchor = new THREE.Vector3();
@@ -175,20 +151,20 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
   let washBlossomHeld = 0; // keeps petal color while the last leaves settle
   return {
     update(dt, time, dronePos, droneVel, throttle) {
-      uniforms.uTime.value = time;
-      uniforms.uFogFar.value = fog.far;
+      uTime.value = time;
+      uFogFar.value = fog.far;
       for (let i = 0; i < GUSTS; i++) {
-        const s = streams[i];
-        s.age += dt;
-        if (s.age > s.dur) respawn(s, dronePos);
-        const t = Math.max(0, s.age);
-        anchor.copy(s.src).addScaledVector(s.dir, s.speed * t);
+        const st = streams[i];
+        st.age += dt;
+        if (st.age > st.dur) respawn(st, dronePos);
+        const t = Math.max(0, st.age);
+        anchor.copy(st.src).addScaledVector(st.dir, st.speed * t);
         // Sink slowly but never into the ground.
-        anchor.y = Math.max(s.src.y - t * 0.45, heightAt(anchor.x, anchor.z) + 1.4);
-        const strength = THREE.MathUtils.smoothstep(s.age, 0, 1.6)
-          * (1 - THREE.MathUtils.smoothstep(s.age, s.dur - 2, s.dur));
-        uniforms.uStreams.value[i].set(anchor.x, anchor.y, anchor.z, strength);
-        uniforms.uStreamDirs.value[i].set(s.dir.x, s.dir.y, s.dir.z, s.blossom || 0);
+        anchor.y = Math.max(st.src.y - t * 0.45, heightAt(anchor.x, anchor.z) + 1.4);
+        const strength = THREE.MathUtils.smoothstep(st.age, 0, 1.6)
+          * (1 - THREE.MathUtils.smoothstep(st.age, st.dur - 2, st.dur));
+        uStreams.array[i].set(anchor.x, anchor.y, anchor.z, strength);
+        uStreamDirs.array[i].set(st.dir.x, st.dir.y, st.dir.z, st.blossom || 0);
       }
 
       // Prop wash: only INSIDE a leafy canopy envelope (dead snags have
@@ -209,8 +185,8 @@ export function createWindLeaves(scene, heightAt, treeColliders, fog) {
       // Snap on fast, linger a moment as the last leaves settle.
       washStrength += (inCanopy - washStrength) * Math.min(1, dt * (inCanopy > washStrength ? 6 : 1.4));
       if (inCanopy > 0) washBlossomHeld = washBlossom;
-      uniforms.uStreams.value[GUSTS].set(dronePos.x, dronePos.y - 0.9, dronePos.z, washStrength);
-      uniforms.uStreamDirs.value[GUSTS].set(droneVel.x * 0.06, 0, droneVel.z * 0.06, washBlossomHeld);
+      uStreams.array[GUSTS].set(dronePos.x, dronePos.y - 0.9, dronePos.z, washStrength);
+      uStreamDirs.array[GUSTS].set(droneVel.x * 0.06, 0, droneVel.z * 0.06, washBlossomHeld);
     },
   };
 }

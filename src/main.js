@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 import { readInput } from './input.js';
 import { Drone } from './drone.js';
 import { initWorldGen, buildTerrain, WATER_LEVEL } from './terrain.js';
@@ -28,13 +28,16 @@ await loadAssets((f) => {
 });
 let bootDismissed = false;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// WebGPU where available; the same renderer transparently falls back to a
+// WebGL2 backend on browsers without it. TSL materials compile to both.
+const renderer = new THREE.WebGPURenderer({ antialias: true });
 // 1.75 max: retina 2x costs ~30% more fragments than the painterly style
 // can justify; the adaptive stepper below still trades further down.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+await renderer.init();
 document.getElementById('app').appendChild(renderer.domElement);
 
 // World seed: ?seed=... in the URL. No seed → roll one and pin it in the URL
@@ -93,7 +96,6 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 const clock = new THREE.Clock();
@@ -108,8 +110,7 @@ let pixelScale = Math.min(window.devicePixelRatio, 1.75);
 function applyPixelScale(p) {
   pixelScale = p;
   renderer.setPixelRatio(p);
-  composer.setPixelRatio(p);
-  composer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 applyPixelScale(pixelScale);
 

@@ -1,10 +1,15 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {
+  attribute, texture, uniform, varying, positionGeometry, positionView,
+  vec2, vec3, float, dot, sin, cos, smoothstep, mix, abs, step, max, min,
+  length, distance, clamp, Fn,
+} from 'three/tsl';
 import { TERRAIN_SIZE } from './terrain.js';
 import { makeRand } from './rng.js';
 import { GLOBAL_TINT } from './dayNight.js';
 
 // Instanced grass meadow. Blades live on a fixed world grid inside a square
-// "patch"; the vertex shader wraps each blade around the drone (mod trick),
+// "patch"; the vertex stage wraps each blade around the drone (mod trick),
 // so the same instances recycle forever — an infinite meadow per draw call.
 //
 // The Ghibli trick: blades take their ROOT color from the same baked ground
@@ -16,186 +21,6 @@ const FLOWER_COUNT = 2600;
 const PATCH_SIZE = 150;
 const FADE_START = PATCH_SIZE / 2 - 26;
 const FADE_END = PATCH_SIZE / 2 - 5;
-
-const common = /* glsl */ `
-  uniform sampler2D uHeightMap;
-  uniform sampler2D uColorMap;
-  uniform vec2 uCenter;   // drone xz — patch center AND downwash source
-  uniform float uDroneY;
-  uniform float uWash;    // throttle² — how hard the props are working
-  uniform float uTime;
-  varying float vFogDepth;
-
-  vec2 wrapAround(vec2 offset) {
-    float halfPatch = ${(PATCH_SIZE / 2).toFixed(1)};
-    return mod(offset - uCenter + halfPatch, ${PATCH_SIZE.toFixed(1)}) - halfPatch + uCenter;
-  }
-
-  vec2 groundUv(vec2 world) {
-    return (world + ${(TERRAIN_SIZE / 2).toFixed(1)}) / ${TERRAIN_SIZE.toFixed(1)};
-  }
-
-  float edgeFade(vec2 wrapped) {
-    return 1.0 - smoothstep(${FADE_START.toFixed(1)}, ${FADE_END.toFixed(1)},
-      max(abs(wrapped.x - uCenter.x), abs(wrapped.y - uCenter.y)));
-  }
-
-  // Two traveling waves — the wind you can SEE crossing the meadow.
-  float windAt(vec2 p) {
-    float w1 = sin(dot(p, vec2(0.055, 0.038)) - uTime * 1.5);
-    float w2 = sin(dot(p, vec2(-0.028, 0.061)) - uTime * 0.9 + 1.7);
-    return w1 * 0.6 + w2 * 0.4;
-  }
-`;
-
-const grassVertex = /* glsl */ `
-  attribute vec2 aOffset;
-  attribute float aScale;
-  attribute float aRot;
-  attribute float aTint;
-  varying float vHeight;
-  varying float vTint;
-  varying float vSweep;
-  varying vec3 vRoot;
-  varying vec2 vWorldXZ;
-  ${common}
-
-  void main() {
-    vec2 wrapped = wrapAround(aOffset);
-    vec4 ground = texture2D(uColorMap, groundUv(wrapped));
-    float scale = aScale * edgeFade(wrapped) * ground.a; // a = grass mask (bare on path)
-
-    vHeight = position.y;
-    vTint = aTint;
-    vRoot = ground.rgb;
-    vWorldXZ = wrapped;
-
-    vec3 p = position;
-    p.x *= mix(1.0, 0.14, p.y);
-    float c = cos(aRot); float s = sin(aRot);
-    p = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
-    p *= scale;
-
-    float wind = windAt(wrapped);
-    vSweep = smoothstep(0.35, 1.15, wind);
-    float bend = (0.10 + 0.22 * (wind * 0.5 + 0.5)) * vHeight * vHeight;
-    p.x += bend * 0.85;
-    p.z += bend * 0.5;
-
-    float h = texture2D(uHeightMap, groundUv(wrapped)).r;
-
-    // Prop downwash: blades blast radially outward under a low drone,
-    // fluttering hard, tips catching light (matches the water wash).
-    float distD = distance(wrapped, uCenter);
-    float agl = uDroneY - h;
-    float wash = uWash * clamp(1.0 - (agl - 1.0) / 8.0, 0.0, 1.0) * smoothstep(6.5, 0.9, distD);
-    if (wash > 0.005) {
-      vec2 dir = distD > 0.25 ? (wrapped - uCenter) / distD : vec2(1.0, 0.0);
-      float flutter = 0.7 + 0.3 * sin(uTime * 22.0 + wrapped.x * 3.1 + wrapped.y * 2.7);
-      float push = wash * flutter * 1.1 * vHeight * vHeight;
-      p.x += dir.x * push;
-      p.z += dir.y * push;
-      p.y -= wash * vHeight * 0.38; // flattened under the blast
-      vSweep = min(1.6, vSweep + wash * 1.2);
-    }
-    vec3 world = vec3(wrapped.x + p.x, h + p.y, wrapped.y + p.z);
-
-    vec4 mv = modelViewMatrix * vec4(world, 1.0);
-    vFogDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const grassFragment = /* glsl */ `
-  uniform float uTime;
-  uniform vec3 uTint;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying float vHeight;
-  varying float vTint;
-  varying float vSweep;
-  varying vec3 vRoot;
-  varying vec2 vWorldXZ;
-  varying float vFogDepth;
-
-  void main() {
-    // Root = exact ground color (slightly darkened for depth), tip = brighter
-    // and warmer; a passing gust pushes tips toward sunlit chartreuse.
-    float tip = vHeight * vHeight;
-    vec3 col = vRoot * mix(0.80, 1.38, tip);
-    col += vec3(0.055, 0.05, 0.005) * tip;
-    col += vRoot * vSweep * tip * 0.45;
-    col *= 0.93 + vTint * 0.14;
-
-    // Same cloud shadows as the terrain overlay, so blades don't glow
-    // inside a shadow patch (constants must match windOverlay.js).
-    float c1 = sin(dot(vWorldXZ, vec2(0.0060, 0.0042)) - uTime * 0.10);
-    float c2 = sin(dot(vWorldXZ, vec2(-0.0035, 0.0065)) - uTime * 0.07 + 2.9);
-    float cloud = smoothstep(0.35, 1.1, c1 * 0.7 + c2 * 0.5);
-    col = mix(col, col * vec3(0.72, 0.80, 0.88), cloud * 0.5);
-    col *= uTint; // day/night
-
-    float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
-    #include <colorspace_fragment>
-  }
-`;
-
-const flowerVertex = /* glsl */ `
-  attribute vec2 aOffset;
-  attribute float aScale;
-  attribute float aRot;
-  attribute float aKind;
-  varying float vKind;
-  ${common}
-
-  void main() {
-    vec2 wrapped = wrapAround(aOffset);
-    vec4 ground = texture2D(uColorMap, groundUv(wrapped));
-    // Flowers grow in clumps, not everywhere, and fade out sooner than grass.
-    float clump = smoothstep(0.15, 0.55,
-      sin(wrapped.x * 0.113 + 3.7) * sin(wrapped.y * 0.087 + 1.3)
-      + sin(wrapped.x * 0.041 - wrapped.y * 0.053) * 0.5);
-    float fade = edgeFade(wrapped);
-    float scale = aScale * fade * fade * ground.a * clump;
-    vKind = aKind;
-
-    vec3 p = position;
-    float c = cos(aRot); float s = sin(aRot);
-    p = vec3(p.x * c - p.z * s, p.y, p.x * s + p.z * c);
-    p *= scale;
-
-    float wind = windAt(wrapped);
-    p.x += wind * 0.06 * position.y;
-
-    float h = texture2D(uHeightMap, groundUv(wrapped)).r;
-    vec3 world = vec3(wrapped.x + p.x, h + p.y, wrapped.y + p.z);
-    vec4 mv = modelViewMatrix * vec4(world, 1.0);
-    vFogDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-
-const flowerFragment = /* glsl */ `
-  uniform vec3 uTint;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  varying float vKind;
-  varying float vFogDepth;
-
-  void main() {
-    vec3 white = vec3(0.93, 0.94, 0.86);
-    vec3 yellow = vec3(0.99, 0.80, 0.35);
-    vec3 pink = vec3(0.96, 0.63, 0.68);
-    vec3 col = vKind < 0.62 ? white : (vKind < 0.85 ? yellow : pink);
-    col *= uTint; // day/night
-    float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), 1.0);
-    #include <colorspace_fragment>
-  }
-`;
 
 function bladeGeometry() {
   // Tapered AND gently arced — curved silhouettes read as soft meadow grass.
@@ -246,50 +71,162 @@ function instancedScatter(blade, count, rand, extra) {
 }
 
 export function createGrass(scene, heightTexture, colorTexture, fog, worldSeed) {
-  const uniforms = {
-    uHeightMap: { value: heightTexture },
-    uColorMap: { value: colorTexture },
-    uCenter: { value: new THREE.Vector2() },
-    uDroneY: { value: 0 },
-    uWash: { value: 0 },
-    uTime: { value: 0 },
-    uTint: GLOBAL_TINT,
-    uFogColor: { value: fog.color },
-    uFogNear: { value: fog.near },
-    uFogFar: { value: fog.far },
-  };
+  const uCenter = uniform(new THREE.Vector2());
+  const uDroneY = uniform(0);
+  const uWash = uniform(0);
+  const uTime = uniform(0);
+  const uTint = uniform(GLOBAL_TINT.value);
+  const uFogColor = uniform(fog.color);
+  const uFogNear = uniform(fog.near);
+  const uFogFar = uniform(fog.far);
+
+  const half = PATCH_SIZE / 2;
+  const wrapAround = (offset) =>
+    offset.sub(uCenter).add(half).mod(PATCH_SIZE).sub(half).add(uCenter);
+  const groundUv = (world) => world.add(TERRAIN_SIZE / 2).div(TERRAIN_SIZE);
+  const edgeFade = (wrapped) =>
+    float(1.0).sub(smoothstep(FADE_START, FADE_END,
+      max(abs(wrapped.x.sub(uCenter.x)), abs(wrapped.y.sub(uCenter.y)))));
+  // Two traveling waves — the wind you can SEE crossing the meadow.
+  const windAt = (p) =>
+    sin(dot(p, vec2(0.055, 0.038)).sub(uTime.mul(1.5))).mul(0.6)
+      .add(sin(dot(p, vec2(-0.028, 0.061)).sub(uTime.mul(0.9)).add(1.7)).mul(0.4));
+
+  // ---- Grass blades -------------------------------------------------------
+  const grassMat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: false });
+  {
+    const aOffset = attribute('aOffset', 'vec2');
+    const aScale = attribute('aScale', 'float');
+    const aRot = attribute('aRot', 'float');
+    const aTint = attribute('aTint', 'float');
+
+    const wrapped = wrapAround(aOffset);
+    const ground = texture(colorTexture, groundUv(wrapped));
+    const scale = aScale.mul(edgeFade(wrapped)).mul(ground.a); // a = grass mask
+
+    const vHeight = positionGeometry.y;
+    const wind = windAt(wrapped);
+
+    grassMat.positionNode = Fn(() => {
+      const p = positionGeometry.toVar();
+      p.x.mulAssign(mix(1.0, 0.14, p.y));
+      const c = cos(aRot);
+      const s = sin(aRot);
+      p.assign(vec3(p.x.mul(c).sub(p.z.mul(s)), p.y, p.x.mul(s).add(p.z.mul(c))));
+      p.mulAssign(scale);
+
+      const bend = wind.mul(0.5).add(0.5).mul(0.22).add(0.10).mul(vHeight).mul(vHeight);
+      p.x.addAssign(bend.mul(0.85));
+      p.z.addAssign(bend.mul(0.5));
+
+      const h = texture(heightTexture, groundUv(wrapped)).r;
+
+      // Prop downwash: blades blast radially outward under a low drone,
+      // fluttering hard, tips catching light (matches the water wash).
+      const distD = distance(wrapped, uCenter);
+      const agl = uDroneY.sub(h);
+      const wash = uWash.mul(clamp(float(1.0).sub(agl.sub(1.0).div(8.0)), 0.0, 1.0))
+        .mul(smoothstep(6.5, 0.9, distD));
+      const dir = wrapped.sub(uCenter).div(max(distD, 0.25));
+      const flutter = sin(uTime.mul(22.0).add(wrapped.x.mul(3.1)).add(wrapped.y.mul(2.7)))
+        .mul(0.3).add(0.7);
+      const push = wash.mul(flutter).mul(1.1).mul(vHeight).mul(vHeight);
+      p.x.addAssign(dir.x.mul(push));
+      p.z.addAssign(dir.y.mul(push));
+      p.y.subAssign(wash.mul(vHeight).mul(0.38)); // flattened under the blast
+
+      return vec3(wrapped.x.add(p.x), h.add(p.y), wrapped.y.add(p.z));
+    })();
+
+    const distD = distance(wrapped, uCenter);
+    const h = texture(heightTexture, groundUv(wrapped)).r;
+    const wash = uWash.mul(clamp(float(1.0).sub(uDroneY.sub(h).sub(1.0).div(8.0)), 0.0, 1.0))
+      .mul(smoothstep(6.5, 0.9, distD));
+    const sweep = min(smoothstep(0.35, 1.15, wind).add(wash.mul(1.2)), 1.6);
+
+    const vRoot = varying(ground.rgb);
+    const vSweep = varying(sweep);
+    const vTint = varying(aTint);
+    const vH = varying(vHeight);
+    const vWorldXZ = varying(wrapped);
+
+    // Root = exact ground color (slightly darkened for depth), tip = brighter
+    // and warmer; a passing gust pushes tips toward sunlit chartreuse.
+    const tip = vH.mul(vH);
+    const col = vRoot.mul(mix(0.80, 1.38, tip)).toVar();
+    col.addAssign(vec3(0.055, 0.05, 0.005).mul(tip));
+    col.addAssign(vRoot.mul(vSweep).mul(tip).mul(0.45));
+    col.mulAssign(vTint.mul(0.14).add(0.93));
+
+    // Same cloud shadows as the terrain overlay, so blades don't glow
+    // inside a shadow patch (constants must match windOverlay.js).
+    const c1 = sin(dot(vWorldXZ, vec2(0.0060, 0.0042)).sub(uTime.mul(0.10)));
+    const c2 = sin(dot(vWorldXZ, vec2(-0.0035, 0.0065)).sub(uTime.mul(0.07)).add(2.9));
+    const cloud = smoothstep(0.35, 1.1, c1.mul(0.7).add(c2.mul(0.5)));
+    const shaded = mix(col, col.mul(vec3(0.72, 0.80, 0.88)), cloud.mul(0.5)).mul(uTint);
+
+    const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+    grassMat.colorNode = mix(shaded, uFogColor, fogF);
+  }
 
   const rand = makeRand(worldSeed ^ 0x51ab7);
   const grassMesh = new THREE.Mesh(
     instancedScatter(bladeGeometry(), BLADE_COUNT, rand, { name: 'aTint', scaleMin: 0.55, scaleRange: 0.7 }),
-    new THREE.ShaderMaterial({
-      vertexShader: grassVertex,
-      fragmentShader: grassFragment,
-      uniforms,
-      side: THREE.DoubleSide,
-    })
+    grassMat
   );
   grassMesh.frustumCulled = false;
   scene.add(grassMesh);
 
+  // ---- Flowers ------------------------------------------------------------
+  const flowerMat = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: false });
+  {
+    const aOffset = attribute('aOffset', 'vec2');
+    const aScale = attribute('aScale', 'float');
+    const aRot = attribute('aRot', 'float');
+    const aKind = attribute('aKind', 'float');
+
+    const wrapped = wrapAround(aOffset);
+    const ground = texture(colorTexture, groundUv(wrapped));
+    // Flowers grow in clumps, not everywhere, and fade out sooner than grass.
+    const clump = smoothstep(0.15, 0.55,
+      sin(wrapped.x.mul(0.113).add(3.7)).mul(sin(wrapped.y.mul(0.087).add(1.3)))
+        .add(sin(wrapped.x.mul(0.041).sub(wrapped.y.mul(0.053))).mul(0.5)));
+    const fade = edgeFade(wrapped);
+    const scale = aScale.mul(fade).mul(fade).mul(ground.a).mul(clump);
+
+    flowerMat.positionNode = Fn(() => {
+      const p = positionGeometry.toVar();
+      const c = cos(aRot);
+      const s = sin(aRot);
+      p.assign(vec3(p.x.mul(c).sub(p.z.mul(s)), p.y, p.x.mul(s).add(p.z.mul(c))));
+      p.mulAssign(scale);
+      p.x.addAssign(windAt(wrapped).mul(0.06).mul(positionGeometry.y));
+      const h = texture(heightTexture, groundUv(wrapped)).r;
+      return vec3(wrapped.x.add(p.x), h.add(p.y), wrapped.y.add(p.z));
+    })();
+
+    const vKind = varying(aKind);
+    const col = mix(vec3(0.93, 0.94, 0.86), vec3(0.99, 0.80, 0.35), step(0.62, vKind)).toVar();
+    col.assign(mix(col, vec3(0.96, 0.63, 0.68), step(0.85, vKind)));
+    col.mulAssign(uTint);
+    const fogF = smoothstep(uFogNear, uFogFar, positionView.z.negate());
+    flowerMat.colorNode = mix(col, uFogColor, fogF);
+  }
+
   const flowerMesh = new THREE.Mesh(
     instancedScatter(flowerGeometry(), FLOWER_COUNT, rand, { name: 'aKind', scaleMin: 0.7, scaleRange: 0.6 }),
-    new THREE.ShaderMaterial({
-      vertexShader: flowerVertex,
-      fragmentShader: flowerFragment,
-      uniforms,
-      side: THREE.DoubleSide,
-    })
+    flowerMat
   );
   flowerMesh.frustumCulled = false;
   scene.add(flowerMesh);
 
   return {
     update(time, dronePos, throttle = 0) {
-      uniforms.uTime.value = time;
-      uniforms.uCenter.value.set(dronePos.x, dronePos.z);
-      uniforms.uDroneY.value = dronePos.y;
-      uniforms.uWash.value = throttle * throttle; // idle props barely stir it
+      uTime.value = time;
+      uCenter.value.set(dronePos.x, dronePos.z);
+      uDroneY.value = dronePos.y;
+      uWash.value = throttle * throttle; // idle props barely stir it
+      uFogFar.value = fog.far;
     },
   };
 }

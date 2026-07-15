@@ -1,132 +1,108 @@
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
+import {
+  texture, uniform, positionWorld, positionView,
+  vec2, vec3, float, dot, sin, smoothstep, mix, abs, step, length,
+  fract, floor, min, max, Fn, If,
+} from 'three/tsl';
 import { TERRAIN_SIZE, WATER_LEVEL } from './terrain.js';
 import { GLOBAL_TINT } from './dayNight.js';
 
 // Ghibli lakes: one still water plane at WATER_LEVEL — wherever the terrain
 // dips below it, a lake appears. The shader samples the terrain heightmap to
 // paint depth color and a white foam rim along the shoreline.
-const vertexShader = /* glsl */ `
-  varying vec3 vWorld;
-  varying float vFogDepth;
-  void main() {
-    vec4 wp = modelMatrix * vec4(position, 1.0);
-    vWorld = wp.xyz;
-    vec4 mv = viewMatrix * wp;
-    vFogDepth = -mv.z;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
+export function createWater(scene, heightTexture, fog) {
+  const uTime = uniform(0);
+  const uDroneXZ = uniform(new THREE.Vector2());
+  const uDroneVel = uniform(new THREE.Vector2());
+  const uWash = uniform(0);
+  const uTint = uniform(GLOBAL_TINT.value);
+  const uFogColor = uniform(fog.color);
+  const uFogNear = uniform(fog.near);
+  const uFogFar = uniform(fog.far);
 
-const fragmentShader = /* glsl */ `
-  uniform sampler2D uHeightMap;
-  uniform float uTime;
-  uniform vec3 uFogColor;
-  uniform float uFogNear;
-  uniform float uFogFar;
-  uniform vec2 uDroneXZ;
-  uniform vec2 uDroneVel; // horizontal velocity — stretches the wash into a wake
-  uniform float uWash; // 0..1 prop-wash intensity (low + throttled = strong)
-  uniform vec3 uTint;
-  varying vec3 vWorld;
-  varying float vFogDepth;
+  const hash = Fn(([p]) => {
+    const q = p.mod(289.0);
+    return fract(sin(dot(q, vec2(127.1, 311.7))).mul(43758.5453));
+  });
 
-  float hash(vec2 p) {
-    p = mod(p, 289.0);
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
+  // Shared bits (the node graph dedupes these between color and opacity).
+  const fogDepth = positionView.z.negate();
+  const uvT = positionWorld.xz.add(TERRAIN_SIZE / 2).div(TERRAIN_SIZE);
+  const depth = float(WATER_LEVEL).sub(texture(heightTexture, uvT).r); // >0 under the lake
+  const wob = sin(positionWorld.x.mul(0.6).add(uTime.mul(1.1))).mul(0.1)
+    .add(sin(positionWorld.z.mul(0.83).sub(uTime.mul(0.8))).mul(0.1));
 
-  void main() {
-    vec2 uv = (vWorld.xz + ${(TERRAIN_SIZE / 2).toFixed(1)}) / ${TERRAIN_SIZE.toFixed(1)};
-    float ground = texture2D(uHeightMap, uv).r;
-    float depth = ${WATER_LEVEL.toFixed(1)} - ground; // >0 under the lake
+  const colorNode = Fn(() => {
+    const world = positionWorld;
 
     // Deep cerulean → teal shallows.
-    vec3 deep = vec3(0.12, 0.34, 0.50);
-    vec3 shallow = vec3(0.40, 0.66, 0.66);
-    vec3 col = mix(shallow, deep, smoothstep(0.3, 7.0, depth));
+    const col = mix(vec3(0.40, 0.66, 0.66), vec3(0.12, 0.34, 0.50),
+      smoothstep(0.3, 7.0, depth)).toVar();
 
     // Slow drifting light bands — SUMS of skewed directional waves (a product
     // of axis-aligned sines makes a checkerboard; never do that).
-    float b1 = sin(dot(vWorld.xz, vec2(0.021, 0.013)) + uTime * 0.4);
-    float b2 = sin(dot(vWorld.xz, vec2(-0.011, 0.026)) - uTime * 0.3 + 2.1);
-    float b3 = sin(dot(vWorld.xz, vec2(0.052, -0.037)) + uTime * 0.6 + 4.0);
-    float band = b1 * 0.45 + b2 * 0.35 + b3 * 0.2;
-    col += vec3(0.035, 0.05, 0.05) * smoothstep(0.1, 1.0, band);
-    col -= vec3(0.03, 0.03, 0.02) * smoothstep(-0.2, -1.0, band);
+    const b1 = sin(dot(world.xz, vec2(0.021, 0.013)).add(uTime.mul(0.4)));
+    const b2 = sin(dot(world.xz, vec2(-0.011, 0.026)).sub(uTime.mul(0.3)).add(2.1));
+    const b3 = sin(dot(world.xz, vec2(0.052, -0.037)).add(uTime.mul(0.6)).add(4.0));
+    const band = b1.mul(0.45).add(b2.mul(0.35)).add(b3.mul(0.2));
+    col.addAssign(vec3(0.035, 0.05, 0.05).mul(smoothstep(0.1, 1.0, band)));
+    col.subAssign(vec3(0.03, 0.03, 0.02).mul(smoothstep(-0.2, -1.0, band)));
 
     // Sparse twinkling glints: hash-scattered, one per ~1.4m cell, only a few
     // percent of cells lit, each with its own flicker phase. Fade with
     // distance so the far lake shimmers via bands instead of dot noise.
-    vec2 sp = vWorld.xz * 0.7;
-    vec2 cell = floor(sp);
-    float rnd = hash(cell);
-    vec2 jitter = vec2(hash(cell + 17.0), hash(cell + 43.0)) - 0.5;
-    float d = length(fract(sp) - 0.5 + jitter * 0.55);
-    float twinkle = 0.5 + 0.5 * sin(uTime * (1.5 + rnd * 3.0) + rnd * 40.0);
-    float glint = smoothstep(0.16, 0.03, d) * step(0.94, rnd) * twinkle;
-    glint *= 1.0 - smoothstep(60.0, 220.0, vFogDepth);
-    col += vec3(0.8, 0.85, 0.8) * glint;
+    const sp = world.xz.mul(0.7);
+    const cell = floor(sp);
+    const rnd = hash(cell);
+    const jitter = vec2(hash(cell.add(17.0)), hash(cell.add(43.0))).sub(0.5);
+    const d = length(fract(sp).sub(0.5).add(jitter.mul(0.55)));
+    const twinkle = sin(uTime.mul(rnd.mul(3.0).add(1.5)).add(rnd.mul(40.0))).mul(0.5).add(0.5);
+    const glint = smoothstep(0.16, 0.03, d).mul(step(0.94, rnd)).mul(twinkle)
+      .mul(float(1.0).sub(smoothstep(60.0, 220.0, fogDepth)));
+    col.addAssign(vec3(0.8, 0.85, 0.8).mul(glint));
 
     // The washing shoreline: the waterline BREATHES — a foam edge slides up
     // the sand and retreats — and a fainter trailing line chases it back out.
-    float wob = sin(vWorld.x * 0.6 + uTime * 1.1) * 0.1 + sin(vWorld.z * 0.83 - uTime * 0.8) * 0.1;
-    float breathe = sin(uTime * 0.75 + wob * 5.0);
-    float shoreline = 0.26 + breathe * 0.13;
-    float foam = 1.0 - smoothstep(shoreline * 0.35, shoreline, depth + wob * 0.3);
-    float lag = 0.6 + sin(uTime * 0.75 - 1.4 + wob * 5.0) * 0.16;
-    foam = max(foam, (1.0 - smoothstep(0.03, 0.16, abs(depth - lag))) * 0.35);
-    col = mix(col, vec3(0.94, 0.97, 0.95), foam * 0.9);
+    const breathe = sin(uTime.mul(0.75).add(wob.mul(5.0)));
+    const shoreline = breathe.mul(0.13).add(0.26);
+    const foamA = float(1.0).sub(smoothstep(shoreline.mul(0.35), shoreline, depth.add(wob.mul(0.3))));
+    const lag = sin(uTime.mul(0.75).sub(1.4).add(wob.mul(5.0))).mul(0.16).add(0.6);
+    const foamB = float(1.0).sub(smoothstep(0.03, 0.16, abs(depth.sub(lag)))).mul(0.35);
+    col.assign(mix(col, vec3(0.94, 0.97, 0.95), max(foamA, foamB).mul(0.9)));
 
     // Prop wash: ripple rings under the drone. When moving, the pattern
     // trails behind and stretches along the flight path — a wake, not a ring.
-    if (uWash > 0.01) {
-      vec2 rel = vWorld.xz - uDroneXZ;
-      float vlen = length(uDroneVel);
-      float dw;
-      if (vlen > 0.8) {
-        vec2 dir = uDroneVel / vlen;
-        float squeeze = min(vlen / 18.0, 1.2);
-        rel += dir * min(vlen * 0.14, 2.8);            // wake center trails behind
-        float along = dot(rel, dir);
-        float across = dot(rel, vec2(-dir.y, dir.x));
-        dw = length(vec2(along / (1.0 + squeeze * 0.9), across)); // elongated
-      } else {
-        dw = length(rel);
-      }
-      float rings = sin(dw * 2.6 - uTime * 7.5) * 0.5 + 0.5;
-      float ringMask = uWash * smoothstep(7.0, 2.0, dw) * smoothstep(0.2, 1.4, dw);
-      col = mix(col, vec3(0.90, 0.96, 0.94), rings * ringMask * 0.5);
-      col += vec3(0.08, 0.10, 0.10) * uWash * smoothstep(2.0, 0.2, dw); // churned center
-    }
+    If(uWash.greaterThan(0.01), () => {
+      const rel = world.xz.sub(uDroneXZ).toVar();
+      const vlen = length(uDroneVel);
+      const dw = length(rel).toVar();
+      If(vlen.greaterThan(0.8), () => {
+        const dir = uDroneVel.div(vlen);
+        const squeeze = min(vlen.div(18.0), 1.2);
+        rel.addAssign(dir.mul(min(vlen.mul(0.14), 2.8))); // wake center trails behind
+        const along = dot(rel, dir);
+        const across = dot(rel, vec2(dir.y.negate(), dir.x));
+        dw.assign(length(vec2(along.div(squeeze.mul(0.9).add(1.0)), across))); // elongated
+      });
+      const rings = sin(dw.mul(2.6).sub(uTime.mul(7.5))).mul(0.5).add(0.5);
+      const ringMask = uWash.mul(smoothstep(7.0, 2.0, dw)).mul(smoothstep(0.2, 1.4, dw));
+      col.assign(mix(col, vec3(0.90, 0.96, 0.94), rings.mul(ringMask).mul(0.5)));
+      col.addAssign(vec3(0.08, 0.10, 0.10).mul(uWash).mul(smoothstep(2.0, 0.2, dw))); // churned center
+    });
 
-    col *= uTint; // day/night
+    col.mulAssign(uTint); // day/night
+    return mix(col, uFogColor, smoothstep(uFogNear, uFogFar, fogDepth));
+  })();
 
-    // Soft dissolve at zero depth — the fix for the hard cut-out edge where
-    // the water plane slices the terrain mesh.
-    float alpha = smoothstep(0.0, 0.2, depth + wob * 0.12);
+  // Soft dissolve at zero depth — the fix for the hard cut-out edge where
+  // the water plane slices the terrain mesh.
+  const opacityNode = smoothstep(0.0, 0.2, depth.add(wob.mul(0.12)));
 
-    float fog = smoothstep(uFogNear, uFogFar, vFogDepth);
-    gl_FragColor = vec4(mix(col, uFogColor, fog), alpha);
-    #include <colorspace_fragment>
-  }
-`;
+  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, fog: false });
+  mat.colorNode = colorNode;
+  mat.opacityNode = opacityNode;
 
-export function createWater(scene, heightTexture, fog) {
-  const uniforms = {
-    uHeightMap: { value: heightTexture },
-    uTime: { value: 0 },
-    uFogColor: { value: fog.color },
-    uFogNear: { value: fog.near },
-    uFogFar: { value: fog.far },
-    uDroneXZ: { value: new THREE.Vector2() },
-    uDroneVel: { value: new THREE.Vector2() },
-    uWash: { value: 0 },
-    uTint: GLOBAL_TINT,
-  };
-  const mesh = new THREE.Mesh(
-    new THREE.CircleGeometry(TERRAIN_SIZE / 2, 48),
-    new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms, transparent: true })
-  );
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(TERRAIN_SIZE / 2, 48), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.y = WATER_LEVEL;
   scene.add(mesh);
@@ -169,18 +145,19 @@ export function createWater(scene, heightTexture, fog) {
   return {
     // droneInfo: {x, z, y, overWater, throttle}
     update(time, dt = 0, droneInfo) {
-      uniforms.uTime.value = time;
+      uTime.value = time;
+      uFogFar.value = fog.far;
       if (!droneInfo) return;
 
       const { x, z, y, vx = 0, vz = 0, overWater, throttle } = droneInfo;
-      uniforms.uDroneVel.value.set(vx, vz);
+      uDroneVel.value.set(vx, vz);
       const aglWater = y - WATER_LEVEL;
       const washTarget = overWater
         ? THREE.MathUtils.clamp(1 - (aglWater - 2) / 9, 0, 1) * (0.35 + 0.65 * throttle)
         : 0;
       washSmooth += (washTarget - washSmooth) * Math.min(1, 6 * dt);
-      uniforms.uWash.value = washSmooth;
-      uniforms.uDroneXZ.value.set(x, z);
+      uWash.value = washSmooth;
+      uDroneXZ.value.set(x, z);
 
       // Spawn droplets when low and working hard.
       if (overWater && aglWater < 6 && washSmooth > 0.25) {
