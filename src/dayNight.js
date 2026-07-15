@@ -25,9 +25,9 @@ const K = (o) => ({
 
 // fog MUST equal the horizon color of the blended sky panoramas, sampled
 // from the center row of each image: day #d7e7cf · dawn/dusk #f2be83 ·
-// night #202d49. Re-sample if the panoramas are regenerated.
+// night #212e4a. Re-sample if the panoramas are regenerated.
 const NIGHT = K({
-  fog: 0x202d49,
+  fog: 0x212e4a,
   sun: 0xa8bce0, sunI: 0.4, hemiSky: 0x35507c, hemiGround: 0x1c2a3c, hemiI: 0.35,
   tint: 0x54689a, cloud: 0x3d4d70,
   fogFar: 460, night: 1, dawnW: 0, nightW: 1,

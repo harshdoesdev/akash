@@ -32,6 +32,22 @@ const skyFragment = /* glsl */ `
   float chash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
   }
+  float shash(vec3 p) {
+    return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+  }
+  // One layer of tiny round twinkling stars on a direction grid.
+  vec3 starLayer(vec3 dir, float freq, float thresh, float bright) {
+    vec3 g = dir * freq;
+    vec3 c = floor(g);
+    float h = shash(c);
+    if (h < thresh) return vec3(0.0);
+    float d = length(fract(g) - 0.5);
+    float star = smoothstep(0.34, 0.04, d);
+    float tw = 0.55 + 0.45 * sin(uTime * (0.7 + shash(c + 7.0) * 2.4) + shash(c + 13.0) * 6.28318);
+    // Cool blue-white with the occasional warm one.
+    vec3 tintS = mix(vec3(0.8, 0.87, 1.0), vec3(1.0, 0.9, 0.75), step(0.92, shash(c + 21.0)));
+    return tintS * star * tw * bright;
+  }
   float cnoise(vec2 p) {
     vec2 i = floor(p);
     vec2 f = fract(p);
@@ -65,8 +81,19 @@ const skyFragment = /* glsl */ `
     vec3 col = texture2D(uDay, uv).rgb * (1.0 - uDawnW - uNightW)
              + texture2D(uDawn, uv).rgb * uDawnW
              + texture2D(uNight, uv).rgb * uNightW;
-    // Dither: breaks up 8-bit banding on the smooth painted gradients.
-    col += (chash(uv * 1024.0) - 0.5) * 0.008;
+    // Dither: breaks up 8-bit banding on the smooth painted gradients —
+    // two octaves, strong enough to melt the dark-blue night bands.
+    col += (chash(uv * 1024.0) - 0.5) * 0.011
+         + (chash(uv * 383.0 + 17.0) - 0.5) * 0.005;
+
+    // Night: a dense field of tiny twinkling stars (two size tiers),
+    // fading toward the horizon haze. The panorama itself is starless.
+    if (uNightW > 0.01 && dir.y > 0.0) {
+      float horizonFade = smoothstep(0.02, 0.24, dir.y);
+      vec3 stars = starLayer(dir, 320.0, 0.9952, 0.5)   // many faint pinpricks
+                 + starLayer(dir, 110.0, 0.9975, 0.95); // a few bright ones
+      col += stars * uNightW * horizonFade;
+    }
 
     if (dir.y > 0.02) {
       // Project onto a flat cloud layer overhead — perspective for free.
