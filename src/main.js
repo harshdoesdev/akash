@@ -31,7 +31,7 @@ let bootDismissed = false;
 
 // WebGPU where available; the same renderer transparently falls back to a
 // WebGL2 backend on browsers without it. TSL materials compile to both.
-const renderer = new THREE.WebGPURenderer({ antialias: true });
+const renderer = new THREE.WebGPURenderer({ antialias: false });
 // 1.75 max: retina 2x costs ~30% more fragments than the painterly style
 // can justify; the adaptive stepper below still trades further down.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));

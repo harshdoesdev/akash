@@ -4,7 +4,11 @@ import { pass, mix, vec3, dot, float, smoothstep, distance, vec2, uv } from 'thr
 // Film grade: one fullscreen pass that makes every frame look color-timed —
 // saturation lift, gentle S-curve, warm sunlight in the highlights, and a
 // soft vignette pulling the eye to center. Runs in linear space; the
-// PostProcessing output transform handles the final sRGB conversion.
+// pipeline's output transform handles the final sRGB conversion.
+// NOTE: no MSAA and no FXAA, deliberately. MSAA on a million tiny leaf
+// cutouts makes every pixel an "edge" (measured ~30x GPU cost), and the
+// FXAA node measured ~80ms at 4K-ish. The 1.75 pixel ratio + painterly
+// style carry edge quality instead.
 export function createPostFX(renderer, scene, camera) {
   const Pipeline = THREE.RenderPipeline || THREE.PostProcessing;
   const post = new Pipeline(renderer);
