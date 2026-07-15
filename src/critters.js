@@ -395,8 +395,13 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     update(dt, time, dronePos, droneAgl) {
       const buzzing = droneAgl < 14;
 
+      // Beyond CULL_D an animal is subpixel: hide it and skip its brain.
+      const CULL_D = 160;
+
       for (const r of rabbits) {
         const dist = Math.hypot(dronePos.x - r.g.position.x, dronePos.z - r.g.position.z);
+        if (dist > CULL_D) { r.g.visible = false; continue; }
+        r.g.visible = true;
         if (buzzing && dist < 9 && r.mode !== 'flee') {
           r.mode = 'flee';
           r.phase = 0;
@@ -440,6 +445,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
 
       for (const s of squirrels) {
         const dist = Math.hypot(dronePos.x - s.g.position.x, dronePos.z - s.g.position.z);
+        if (dist > CULL_D) { s.g.visible = false; continue; }
+        s.g.visible = true;
         const scared = buzzing && dist < 7;
         s.timer -= dt;
 
@@ -475,6 +482,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
 
       for (const s of sheep) {
         const dist = Math.hypot(dronePos.x - s.g.position.x, dronePos.z - s.g.position.z);
+        if (dist > CULL_D) { s.g.visible = false; continue; }
+        s.g.visible = true;
         if (buzzing && dist < 11 && s.mode !== 'flee') s.mode = 'flee';
         s.timer -= dt;
 
@@ -516,6 +525,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
 
       for (const d of deer) {
         const dist = Math.hypot(dronePos.x - d.g.position.x, dronePos.z - d.g.position.z);
+        if (dist > CULL_D) { d.g.visible = false; continue; }
+        d.g.visible = true;
         if (buzzing && dist < 13 && d.mode !== 'flee') { d.mode = 'flee'; d.phase = 0; }
         else if (buzzing && dist < 30 && d.mode !== 'flee' && d.mode !== 'alert') {
           d.mode = 'alert';
