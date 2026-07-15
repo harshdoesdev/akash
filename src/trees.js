@@ -86,12 +86,12 @@ const leafVertex = /* glsl */ `
     wp.z += sway * 0.6;
     wp += aNormal * (sin(uTime * 2.1 + aData.w) * 0.05);
 #ifndef CLUMP
-    // Prop wash: leaves near the hovering drone thrash violently.
-    float wash = uWash.w * (1.0 - smoothstep(3.0, 9.0, distance(aPos, uWash.xyz)));
+    // Prop wash: leaves near the hovering drone rustle and stir.
+    float wash = uWash.w * (1.0 - smoothstep(2.5, 8.0, distance(aPos, uWash.xyz)));
     if (wash > 0.001) {
-      wp += aNormal * (sin(uTime * 16.0 + aData.w * 7.0) * 0.38 * wash);
-      wp.x += sin(uTime * 13.0 + aData.w * 11.0) * 0.3 * wash;
-      wp.z += cos(uTime * 11.0 + aData.w * 5.0) * 0.3 * wash;
+      wp += aNormal * (sin(uTime * 13.0 + aData.w * 7.0) * 0.13 * wash);
+      wp.x += sin(uTime * 10.0 + aData.w * 11.0) * 0.1 * wash;
+      wp.z += cos(uTime * 9.0 + aData.w * 5.0) * 0.1 * wash;
     }
 #endif
 
