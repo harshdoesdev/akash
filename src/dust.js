@@ -30,7 +30,7 @@ export function createDust(scene, heightAt) {
       const path = distToPath(x, z) < 2.6 && h > WATER_LEVEL + 0.8;
       const agl = y - h;
       const strength = (beach || path) && agl < 7
-        ? THREE.MathUtils.clamp(1 - (agl - 1.5) / 5.5, 0, 1) * throttle * throttle
+        ? Math.max(0, Math.min(1, 1 - (agl - 1.5) / 5.5)) * throttle * throttle
         : 0;
 
       if (strength > 0.15) {
