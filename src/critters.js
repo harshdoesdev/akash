@@ -20,6 +20,9 @@ const FLOCKS = 3;
 const SHEEP_HERDS = 2;
 const DEER_GROUPS = 2;
 
+// DEBUG: cluster every animal near the spawn point so they're easy to find.
+const FAUNA_NEAR_SPAWN = true;
+
 export function createCritters(scene, heightAt, colliders, worldSeed) {
   const rand = makeRand(worldSeed ^ 0x0c211e5);
   const gradient = toonGradient();
@@ -63,8 +66,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     let x, z;
     let tries = 0;
     do {
-      x = (rand() - 0.5) * 1100;
-      z = (rand() - 0.5) * 1100;
+      x = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 80 : 1100);
+      z = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 80 : 1100);
     } while (!groundOk(x, z) && ++tries < 30);
     if (tries >= 30) continue;
     const { g, ears } = buildRabbit();
@@ -86,40 +89,84 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
   // ---------- Squirrels ----------
   const russet = toon(0xa2593a);
   const russetDark = toon(0x84462e);
+  const russetCream = toon(0xdfc09c);
   const squirrels = [];
 
+  // Sitting-upright squirrel: haunches + chest + head with tufted ears,
+  // paws, and one big S-curve plume tail (a dense tapered chain of spheres
+  // along a curve so it reads as a single brush stroke, not stacked blobs).
   function buildSquirrel() {
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), russet);
-    body.scale.set(1, 0.9, 1.5);
-    body.position.y = 0.09;
-    body.castShadow = true;
-    g.add(body);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), russet);
-    head.position.set(0, 0.15, 0.13);
+    const haunch = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), russet);
+    haunch.scale.set(1.1, 0.85, 1.0);
+    haunch.position.set(0, 0.085, -0.02);
+    haunch.castShadow = true;
+    g.add(haunch);
+    const chest = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), russet);
+    chest.scale.set(0.8, 1.15, 0.85);
+    chest.position.set(0, 0.18, 0.04);
+    g.add(chest);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 6), russetCream);
+    belly.scale.set(0.7, 1.05, 0.6);
+    belly.position.set(0, 0.17, 0.085);
+    g.add(belly);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), russet);
+    head.scale.set(0.95, 0.9, 1.0);
+    head.position.set(0, 0.29, 0.07);
     g.add(head);
-    const tailParts = [];
-    const tailGeo = [0.05, 0.065, 0.05];
-    const tailPos = [[0, 0.1, -0.13], [0, 0.2, -0.17], [0, 0.29, -0.12]];
-    for (let i = 0; i < 3; i++) {
-      const t = new THREE.Mesh(new THREE.SphereGeometry(tailGeo[i], 8, 6), russetDark);
-      t.position.set(...tailPos[i]);
-      g.add(t);
-      tailParts.push(t);
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), russetCream);
+    muzzle.position.set(0, 0.275, 0.12);
+    g.add(muzzle);
+    for (const s of [-1, 1]) {
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.05, 5), russetDark);
+      ear.position.set(s * 0.038, 0.35, 0.055);
+      ear.rotation.z = s * -0.25;
+      g.add(ear);
+      const paw = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), russet);
+      paw.position.set(s * 0.032, 0.135, 0.105);
+      g.add(paw);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), russetDark);
+      foot.scale.set(1, 0.5, 1.8);
+      foot.position.set(s * 0.06, 0.02, 0.05);
+      g.add(foot);
     }
-    return { g, tailParts };
+    // Tail: hinged at the rump so it can flick as one piece.
+    const tail = new THREE.Group();
+    tail.position.set(0, 0.06, -0.09);
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, -0.01, 0),
+      new THREE.Vector3(0, 0.03, -0.09),
+      new THREE.Vector3(0, 0.13, -0.13),
+      new THREE.Vector3(0, 0.24, -0.10),
+      new THREE.Vector3(0, 0.30, -0.01),
+      new THREE.Vector3(0, 0.31, 0.05),
+    ]);
+    const SEGS = 9;
+    for (let i = 0; i <= SEGS; i++) {
+      const t = i / SEGS;
+      const r = 0.03 + Math.sin(Math.min(1, t * 1.15) * Math.PI) * 0.045;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), i === SEGS ? russetCream : russetDark);
+      puff.scale.set(0.75, 1, 1); // flatten side-on, plume-like
+      puff.position.copy(curve.getPoint(t));
+      tail.add(puff);
+    }
+    g.add(tail);
+    return { g, tail };
   }
 
   // Squirrels live at tree bases (colliders carry every tree's position).
-  for (let i = 0; i < SQUIRREL_COUNT && colliders.length; i++) {
-    const home = colliders[Math.floor(rand() * colliders.length)];
+  const homePool = FAUNA_NEAR_SPAWN
+    ? colliders.filter((c) => Math.hypot(c.x, c.z) < 90)
+    : colliders;
+  for (let i = 0; i < SQUIRREL_COUNT && homePool.length; i++) {
+    const home = homePool[Math.floor(rand() * homePool.length)];
     if (!groundOk(home.x, home.z)) continue;
-    const { g, tailParts } = buildSquirrel();
+    const { g, tail } = buildSquirrel();
     g.scale.setScalar(1.4);
     g.position.set(home.x + 1, heightAt(home.x + 1, home.z), home.z);
     scene.add(g);
     squirrels.push({
-      g, tailParts, home,
+      g, tail, home,
       mode: 'pause',
       timer: rand() * 2,
       heading: rand() * Math.PI * 2,
@@ -166,8 +213,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     let ax, az;
     let tries = 0;
     do {
-      ax = (rand() - 0.5) * 1000;
-      az = (rand() - 0.5) * 1000;
+      ax = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 140 : 1000);
+      az = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 140 : 1000);
     } while (!groundOk(ax, az) && ++tries < 30);
     if (tries >= 30) continue;
     const count = 4 + Math.floor(rand() * 3);
@@ -249,8 +296,8 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     let ax, az;
     let tries = 0;
     do {
-      ax = (rand() - 0.5) * 1100;
-      az = (rand() - 0.5) * 1100;
+      ax = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 160 : 1100);
+      az = (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 160 : 1100);
     } while (!groundOk(ax, az) && ++tries < 30);
     if (tries >= 30) continue;
     const count = 2 + Math.floor(rand() * 2);
@@ -308,10 +355,13 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
     }
     flocks.push({
       birds,
-      center: new THREE.Vector3((rand() - 0.5) * 800, 0, (rand() - 0.5) * 800),
+      center: new THREE.Vector3(
+        (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 160 : 800), 0,
+        (rand() - 0.5) * (FAUNA_NEAR_SPAWN ? 160 : 800)
+      ),
       angle: rand() * Math.PI * 2,
       radius: 35 + rand() * 40,
-      alt: 28 + rand() * 40,
+      alt: FAUNA_NEAR_SPAWN ? 18 + rand() * 14 : 28 + rand() * 40,
       speed: (0.1 + rand() * 0.06) * (rand() < 0.5 ? 1 : -1),
       drift: rand() * Math.PI * 2,
     });
@@ -393,12 +443,13 @@ export function createCritters(scene, heightAt, colliders, worldSeed) {
         s.timer -= dt;
 
         if (s.mode === 'pause') {
-          // Sit upright, tail curled, looking around.
-          s.g.rotation.x = -0.4;
-          s.tailParts[2].position.z = -0.1 + Math.sin(time * 2.2 + s.heading) * 0.03;
+          // Sit upright, tail flicking softly.
+          s.g.rotation.x = -0.12;
+          s.tail.rotation.x = Math.sin(time * 2.4 + s.heading) * 0.12;
           if (s.timer <= 0 || scared) {
             s.mode = 'dash';
-            s.g.rotation.x = 0;
+            s.g.rotation.x = 0.35; // lunge forward while running
+            s.tail.rotation.x = -0.5; // tail streams behind
             // Head somewhere near home (or straight away from the drone).
             s.heading = scared
               ? Math.atan2(s.g.position.x - dronePos.x, s.g.position.z - dronePos.z)
