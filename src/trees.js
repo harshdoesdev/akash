@@ -108,7 +108,7 @@ export function createForest(scene, heightAt, worldSeed) {
       let vis, right, up2;
       if (clump) {
         // Far LOD: camera-facing painted clumps fade in past the leaf range.
-        vis = smoothstep(210.0, 290.0, dist);
+        vis = smoothstep(120.0, 190.0, dist);
         const fwd = normalize(cameraPosition.sub(aPos));
         right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
         up2 = cross(fwd, right);
@@ -116,14 +116,14 @@ export function createForest(scene, heightAt, worldSeed) {
         // Near LOD: detailed spray cards shrink away in the crossfade band.
         // Cards almost touching the camera also shrink — kills the worst
         // full-screen overdraw when flying through a canopy.
-        vis = float(1.0).sub(smoothstep(240.0, 320.0, dist)).mul(smoothstep(1.5, 5.0, dist));
+        vis = float(1.0).sub(smoothstep(150.0, 220.0, dist)).mul(smoothstep(1.5, 5.0, dist));
         // Leaves lie roughly tangent to their puff sphere, randomly twisted
         // and tilted — the volume look comes from the shared sphere normals.
         const h1 = hash1(dot(aPos, vec3(12.9898, 78.233, 37.719)));
-        // Dithered thinning: past ~110m cards drop out one by one (stable
+        // Dithered thinning: past ~90m cards drop out one by one (stable
         // per-card random — no popping) and survivors grow to keep the
         // canopy mass. Slashes distant fill cost the fps meter can't see.
-        const thin = smoothstep(110.0, 290.0, dist);
+        const thin = smoothstep(90.0, 200.0, dist);
         const keep = fract(h1.mul(7.77)).greaterThan(thin.mul(0.6)).select(float(1.0), float(0.0));
         vis = vis.mul(keep).mul(thin.mul(0.45).add(1.0));
         const h2 = hash1(dot(aPos, vec3(39.3467, 11.135, 83.155)));
