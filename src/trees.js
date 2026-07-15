@@ -33,6 +33,7 @@ const leafVertex = /* glsl */ `
   attribute vec4 aData;   // size, colorJitter, ao, flutterPhase
   attribute vec3 aMisc;   // swayPhase, swayWeight, blossom
   uniform float uTime;
+  uniform vec4 uWash; // drone xyz + wash strength
   uniform vec3 uSunDir;
   uniform vec3 uShadow;
   uniform vec3 uMid;
@@ -63,7 +64,9 @@ const leafVertex = /* glsl */ `
     vec3 up2 = cross(fwd, right);
 #else
     // Near LOD: detailed spray cards shrink away in the crossfade band.
-    float vis = 1.0 - smoothstep(150.0, 220.0, dist);
+    // Cards almost touching the camera also shrink — kills the worst
+    // full-screen overdraw when flying through a canopy.
+    float vis = (1.0 - smoothstep(150.0, 220.0, dist)) * smoothstep(1.2, 3.5, dist);
     // Leaves lie roughly tangent to their puff sphere (like sprays hugging
     // the canopy surface), randomly twisted and tilted — full coverage from
     // outside, and the volume look comes from the shared sphere normals.
@@ -82,6 +85,15 @@ const leafVertex = /* glsl */ `
     wp.x += sway;
     wp.z += sway * 0.6;
     wp += aNormal * (sin(uTime * 2.1 + aData.w) * 0.05);
+#ifndef CLUMP
+    // Prop wash: leaves near the hovering drone thrash violently.
+    float wash = uWash.w * (1.0 - smoothstep(3.0, 9.0, distance(aPos, uWash.xyz)));
+    if (wash > 0.001) {
+      wp += aNormal * (sin(uTime * 16.0 + aData.w * 7.0) * 0.38 * wash);
+      wp.x += sin(uTime * 13.0 + aData.w * 11.0) * 0.3 * wash;
+      wp.z += cos(uTime * 11.0 + aData.w * 5.0) * 0.3 * wash;
+    }
+#endif
 
     // One flat tone per leaf: banded ramp over the sphere normal's light,
     // pushed down by ambient occlusion (interior / low canopy) and nudged
@@ -202,6 +214,7 @@ export function createForest(scene, heightAt, worldSeed) {
 
   const leafUniforms = {
     uTime: { value: 0 },
+    uWash: { value: new THREE.Vector4(0, -9999, 0, 0) },
     uMap: { value: null },
     uReady: { value: 0 },
     uSunDir: { value: SUN_DIR.clone() },
@@ -431,8 +444,15 @@ export function createForest(scene, heightAt, worldSeed) {
       }
     }
 
-    // Trunk collider: the slender pipe-model trunk.
-    colliders.push({ x, z, r: Math.max(0.22, h * 0.022), top: y + h * 0.42 });
+    // Trunk collider, plus the canopy envelope (for prop-wash leaf checks).
+    colliders.push({
+      x, z,
+      r: Math.max(0.22, h * 0.022),
+      top: y + h * 0.42,
+      canopyR: deadTree ? 0 : h * 0.32 * spread * leafMul,
+      canopyTop: y + h * 1.05,
+      blossom, // torn leaves match the tree's color
+    });
   }
 
   // Layout: fewer, richer trees — each one now costs real leaves.
@@ -530,9 +550,14 @@ export function createForest(scene, heightAt, worldSeed) {
 
   return {
     colliders,
-    update(time) {
+    update(time, dronePos, washPower) {
       leafUniforms.uTime.value = time;
       leafUniforms.uFogFar.value = fog.far; // day/night pulls fog in
+      if (dronePos) {
+        leafUniforms.uWash.value.set(
+          dronePos.x, dronePos.y, dronePos.z, 0.4 + (washPower || 0) * 0.6
+        );
+      }
     },
   };
 }

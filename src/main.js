@@ -123,7 +123,7 @@ renderer.setAnimationLoop(() => {
     throttle: drone.throttleVisual,
   });
   windOverlay.update(time);
-  world.update(time);
+  world.update(time, drone.position, drone.throttleVisual);
   windLeaves.update(dt, time, drone.position, drone.velocity, drone.throttleVisual);
   dayNight.update(dt);
   fireflies.update(dt, time, drone.position, dayNight.nightFactor);

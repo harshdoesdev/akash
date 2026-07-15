@@ -68,8 +68,8 @@ export function buildWorld(scene, heightAt, worldSeed) {
     hemi,
     sunDirection,
     colliders: forest.colliders,
-    update(time) {
-      forest.update(time);
+    update(time, dronePos, washPower) {
+      forest.update(time, dronePos, washPower);
     },
   };
 }
