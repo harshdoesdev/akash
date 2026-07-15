@@ -206,9 +206,9 @@ renderer.setAnimationLoop(() => {
     // Give the page a few seconds to settle, then trade pixels for frames —
     // triggered by real fps drops OR by GPU queue latency (the honest signal
     // on WebGPU, where rAF keeps ticking 60 while the GPU falls behind).
-    if (clock.getElapsed() > 4 && pixelScale > 1.0
+    if (clock.getElapsed() > 4 && pixelScale > 0.85
       && ((fpsValue > 0 && fpsValue < 45) || gpuProbe.lag > 26)) {
-      applyPixelScale(Math.max(1.0, pixelScale - 0.25));
+      applyPixelScale(Math.max(0.85, pixelScale - 0.25));
       gpuProbe.lag = 0; // re-measure at the new resolution before stepping again
     }
   }
