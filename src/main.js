@@ -34,14 +34,32 @@ let bootDismissed = false;
 
 // WebGPU where available; the same renderer transparently falls back to a
 // WebGL2 backend on browsers without it. TSL materials compile to both.
-const renderer = new THREE.WebGPURenderer({ antialias: false });
 // 1.75 max: retina 2x costs ~30% more fragments than the painterly style
 // can justify; the adaptive stepper below still trades further down.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-await renderer.init();
+function makeRenderer(forceWebGL) {
+  const r = new THREE.WebGPURenderer({ antialias: false, forceWebGL });
+  r.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+  r.setSize(window.innerWidth, window.innerHeight);
+  r.shadowMap.enabled = true;
+  r.shadowMap.type = THREE.PCFSoftShadowMap;
+  return r;
+}
+let renderer = makeRenderer(false);
+try {
+  await renderer.init();
+} catch {
+  // iOS Safari can expose navigator.gpu yet fail adapter/device init —
+  // rebuild on the WebGL2 backend instead of dying to a blank page.
+  try { renderer.dispose(); } catch { /* half-initialized */ }
+  renderer = makeRenderer(true);
+  try {
+    await renderer.init();
+  } catch (err) {
+    document.getElementById('boot-sub').textContent =
+      'this browser could not start the game';
+    throw err;
+  }
+}
 document.getElementById('app').appendChild(renderer.domElement);
 
 // World seed: ?seed=... in the URL. No seed → roll one and pin it in the URL
