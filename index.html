@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>akash alpha — आकाश</title>
     <meta name="description" content="Akash alpha build: a tranquil drone flight through a painterly sky meadow." />
     <link rel="icon" type="image/png" href="./branding/akash-icon.png" />
@@ -210,8 +210,8 @@
       /* Small corner fullscreen toggle — icon + quiet label, not a pill. */
       .fs-toggle {
         position: fixed;
-        right: 18px;
-        bottom: 18px;
+        right: max(18px, env(safe-area-inset-right));
+        bottom: max(18px, env(safe-area-inset-bottom));
         z-index: 6;
         display: flex;
         align-items: center;
@@ -239,7 +239,7 @@
       body.touch #controls { display: none; } /* keyboard hints are noise on touch */
       .stick {
         position: fixed;
-        bottom: 30px;
+        bottom: max(30px, env(safe-area-inset-bottom));
         width: 116px;
         height: 116px;
         border-radius: 50%;
@@ -251,8 +251,8 @@
         touch-action: none;
         z-index: 4;
       }
-      #stick-left { left: 30px; }
-      #stick-right { right: 30px; }
+      #stick-left { left: max(30px, env(safe-area-inset-left)); }
+      #stick-right { right: max(30px, env(safe-area-inset-right)); }
       .stick .nub {
         width: 52px;
         height: 52px;
@@ -263,8 +263,8 @@
       }
       .touch-btns {
         position: fixed;
-        top: 14px;
-        right: 14px;
+        top: max(14px, env(safe-area-inset-top));
+        right: max(14px, env(safe-area-inset-right));
         display: flex;
         gap: 10px;
         z-index: 4;
@@ -277,6 +277,27 @@
         color: #fff;
         background: rgba(255, 255, 255, 0.16);
         border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+
+      /* Short landscape viewports (phones): the desktop-sized lockup pushes
+         the buttons below the fold and nothing scrolls. Compact everything
+         so the whole menu fits ~400px of height. */
+      @media (max-height: 540px) {
+        .brand-wordmark { width: min(300px, 42vw); }
+        .brand-lockup { margin-bottom: 6px; }
+        .menu-sub { font-size: 11px; margin-top: 2px; margin-bottom: 14px; }
+        .menu-buttons { gap: 8px; }
+        .menu-buttons button, .panel-buttons button {
+          padding: 8px 0;
+          width: 190px;
+          font-size: 13px;
+        }
+        .menu-seed { margin-top: 12px; font-size: 10px; }
+        .alpha-pill { display: none; }
+        .panel-card { padding: 16px 28px; min-width: 280px; }
+        .panel-title { font-size: 15px; margin-bottom: 10px; }
+        .slider-row { margin-bottom: 7px; font-size: 11px; }
+        #boot-wordmark { width: min(220px, 34vw); }
       }
 
       /* Portrait on a touch device: the game is a landscape film. */
