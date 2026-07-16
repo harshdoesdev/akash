@@ -1,12 +1,17 @@
 // Procedural audio — no files. Layers, each on its own bus for the mixer:
-//  - ambience: looped filtered wind noise + synthesized bird chirps
+//  - wind: looped noise bed (gusting LFO) + a bandpass whoosh that sweeps
+//    up with airspeed
+//  - ambience: synthesized bird chirps
 //  - drone: detuned saw pair pitched to throttle
 //  - bgm: generative music — slow warm maj7 pad chords + sparse music-box
 //    plucks on a pentatonic scale through a feedback delay
 // Volumes persist to localStorage; audio starts on the menu's Fly click
 // (a user gesture, which satisfies the autoplay policy).
 const STORE_KEY = 'akash-audio-v1';
-const DEFAULTS = { master: 0.55, drone: 1.0, ambience: 1.0, bgm: 0.5 };
+const DEFAULTS = { master: 0.55, drone: 0.8, wind: 1.0, ambience: 1.0, bgm: 0.5 };
+// Sliders are linear but loudness perception is logarithmic — square the
+// slider value so "half volume" actually sounds like half.
+const curve = (v) => v * v;
 
 export function createAudio() {
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -25,16 +30,16 @@ export function createAudio() {
   master.connect(ctx.destination);
 
   const buses = {};
-  for (const name of ['drone', 'ambience', 'bgm']) {
+  for (const name of ['drone', 'wind', 'ambience', 'bgm']) {
     buses[name] = ctx.createGain();
-    buses[name].gain.value = volumes[name];
+    buses[name].gain.value = curve(volumes[name]);
     buses[name].connect(master);
   }
 
   let started = false;
   let muted = false;
   const applyMaster = (ramp = 0.2) => {
-    const target = started && !muted ? volumes.master : 0;
+    const target = started && !muted ? curve(volumes.master) : 0;
     master.gain.linearRampToValueAtTime(target, ctx.currentTime + ramp);
   };
   const start = () => {
@@ -54,15 +59,36 @@ export function createAudio() {
   const setVolume = (name, v) => {
     volumes[name] = Math.max(0, Math.min(1, v));
     if (name === 'master') applyMaster(0.1);
-    else buses[name].gain.linearRampToValueAtTime(volumes[name], ctx.currentTime + 0.1);
+    else buses[name].gain.linearRampToValueAtTime(curve(volumes[name]), ctx.currentTime + 0.1);
     try { localStorage.setItem(STORE_KEY, JSON.stringify(volumes)); } catch { /* private mode */ }
   };
   const getVolume = (name) => volumes[name];
 
-  // ---- Wind (ambience)
+  // ---- Wind (its own bus): a soft low bed that gusts, plus a bandpass
+  // whoosh that sweeps up with airspeed — the "air rushing past" layer.
   const noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
   const data = noiseBuf.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+
+  // Softer pink-ish noise for water — raw white noise reads as "zsh" static.
+  // One-pole smoothed, with the loop seam crossfaded so it doesn't thump.
+  const smoothBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const sdata = smoothBuf.getChannelData(0);
+  let lastS = 0;
+  for (let i = 0; i < sdata.length; i++) {
+    lastS = lastS * 0.94 + (Math.random() * 2 - 1) * 0.25;
+    sdata[i] = lastS * 2.2;
+  }
+  const SEAM = 2048;
+  for (let k = 0; k < SEAM; k++) {
+    const mixT = k / SEAM;
+    const j = sdata.length - SEAM + k;
+    sdata[j] = sdata[j] * (1 - mixT) + sdata[k] * mixT;
+  }
+  const waterNoise = ctx.createBufferSource();
+  waterNoise.buffer = smoothBuf;
+  waterNoise.loop = true;
+  waterNoise.start();
 
   const wind = ctx.createBufferSource();
   wind.buffer = noiseBuf;
@@ -72,15 +98,98 @@ export function createAudio() {
   windFilter.frequency.value = 480;
   const windGain = ctx.createGain();
   windGain.gain.value = 0.06;
-  wind.connect(windFilter).connect(windGain).connect(buses.ambience);
+  wind.connect(windFilter).connect(windGain).connect(buses.wind);
+  const whooshFilter = ctx.createBiquadFilter();
+  whooshFilter.type = 'bandpass';
+  whooshFilter.frequency.value = 380;
+  whooshFilter.Q.value = 0.9;
+  // White noise through a bandpass alone sizzles ("grain") — a lowpass on
+  // top rounds it into an actual whoosh.
+  const whooshSmooth = ctx.createBiquadFilter();
+  whooshSmooth.type = 'lowpass';
+  whooshSmooth.frequency.value = 1100;
+  const whooshGain = ctx.createGain();
+  whooshGain.gain.value = 0;
+  wind.connect(whooshFilter).connect(whooshSmooth).connect(whooshGain).connect(buses.wind);
   wind.start();
+  // Slow gust LFO breathing on the bed — still air is never a flat hiss.
+  const gust = ctx.createOscillator();
+  gust.type = 'sine';
+  gust.frequency.value = 0.13;
+  const gustDepth = ctx.createGain();
+  gustDepth.gain.value = 0.02;
+  gust.connect(gustDepth).connect(windGain.gain);
+  gust.start();
+
+  // ---- Water (ambience/nature bus)
+  // A LAKE, not a sea: oceans roar in continuous surf; lakes lap — quiet,
+  // discrete little slaps and gurgles at the waterline. So: a barely-there
+  // damp ripple bed, plus randomized lap events and sparse bubble plips.
+  const shoreHP = ctx.createBiquadFilter();
+  shoreHP.type = 'highpass';
+  shoreHP.frequency.value = 140;
+  const shoreFilter = ctx.createBiquadFilter();
+  shoreFilter.type = 'lowpass';
+  shoreFilter.frequency.value = 450; // damp, dark — no crisp hiss
+  const shoreGain = ctx.createGain();
+  shoreGain.gain.value = 0;
+  waterNoise.connect(shoreHP).connect(shoreFilter).connect(shoreGain)
+    .connect(buses.ambience);
+
+  // One soft wavelet slapping the shore: a dark little noise puff.
+  function playLap(strength) {
+    const t0 = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = smoothBuf;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 420 + Math.random() * 320;
+    const g = ctx.createGain();
+    const peak = (0.05 + Math.random() * 0.08) * strength;
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.04 + Math.random() * 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.3 + Math.random() * 0.3);
+    src.connect(lp).connect(g).connect(buses.ambience);
+    src.start(t0, Math.random() * 1.3, 0.8);
+  }
+
+  // A tiny bubble "plip" — short sine with a slight upward chirp (the
+  // resonance of a small bubble reaching the surface).
+  function playPlip(strength) {
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    const f0 = 600 + Math.random() * 900;
+    osc.frequency.setValueAtTime(f0, t0);
+    osc.frequency.exponentialRampToValueAtTime(f0 * (1.3 + Math.random() * 0.5), t0 + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime((0.012 + Math.random() * 0.018) * strength, t0);
+    g.gain.exponentialRampToValueAtTime(0.0004, t0 + 0.09 + Math.random() * 0.08);
+    osc.connect(g).connect(buses.ambience);
+    osc.start(t0);
+    osc.stop(t0 + 0.25);
+  }
+  let lapTimer = 1;
+  let plipTimer = 3;
+  // Skim spray: rotor downwash kicking water when hovering low over the
+  // lake — brighter than the whoosh but rounded the same way.
+  const sprayFilter = ctx.createBiquadFilter();
+  sprayFilter.type = 'bandpass';
+  sprayFilter.frequency.value = 1400;
+  sprayFilter.Q.value = 0.8;
+  const spraySmooth = ctx.createBiquadFilter();
+  spraySmooth.type = 'lowpass';
+  spraySmooth.frequency.value = 1900;
+  const sprayGain = ctx.createGain();
+  sprayGain.gain.value = 0;
+  wind.connect(sprayFilter).connect(spraySmooth).connect(sprayGain).connect(buses.ambience);
 
   // ---- Motor (drone)
   const motorGain = ctx.createGain();
   motorGain.gain.value = 0;
   const motorFilter = ctx.createBiquadFilter();
   motorFilter.type = 'lowpass';
-  motorFilter.frequency.value = 900;
+  motorFilter.frequency.value = 900; // the rotor voicing — don't dull it
   motorFilter.connect(motorGain).connect(buses.drone);
   const oscA = ctx.createOscillator();
   oscA.type = 'sawtooth';
@@ -222,7 +331,12 @@ export function createAudio() {
     start,
     setVolume,
     getVolume,
-    update(dt, { speed, throttle, agl, flying = true }) {
+    update(dt, {
+      speed, throttle, agl, flying = true, camDist = 5.6,
+      shore = 0,      // 0..1 — how much nearby low-altitude water
+      overWater = false,
+      waterH = 999,   // height above the water surface
+    }) {
       if (!started || muted) return;
 
       // On menus the drone is unmanned: motor fades out entirely and the
@@ -230,16 +344,44 @@ export function createAudio() {
       const spd = flying ? speed : 0;
       const thr = flying ? throttle : 0;
 
-      // Wind builds with airspeed and altitude.
-      const windTarget = Math.min(0.4, 0.05 + spd * 0.007 + agl * 0.001);
+      // Wind: the bed builds gently with airspeed and altitude; the whoosh
+      // layer carries the sense of speed, sweeping up in level and pitch.
+      const windTarget = Math.min(0.3, 0.045 + spd * 0.004 + agl * 0.0008);
       lerp(windGain.gain, windTarget, dt, 2);
-      lerp(windFilter.frequency, 420 + spd * 28, dt, 2);
+      lerp(windFilter.frequency, 420 + spd * 20, dt, 2);
+      const whooshTarget = Math.min(0.22, Math.max(0, spd - 3) * 0.011);
+      lerp(whooshGain.gain, whooshTarget, dt, 3);
+      lerp(whooshFilter.frequency, 320 + spd * 17, dt, 3);
 
-      // Motor whine follows throttle — silent when not flying.
-      lerp(motorGain.gain, flying ? 0.02 + thr * 0.075 : 0, dt, 5);
+      // Motor whine follows throttle — silent when not flying. Loudness is
+      // the mixer's job (perceptual curve), not the voicing's. The camera
+      // hears it, but gently: the chase cam stretches to 8–12m at speed, so
+      // full level holds to 9m and never drops below 40% — distance should
+      // read as nuance, not dimness.
+      const att = Math.max(0.4, Math.min(1, Math.pow(9 / Math.max(camDist, 9), 1.2)));
+      lerp(motorGain.gain, flying ? (0.02 + thr * 0.075) * att : 0, dt, 5);
       const f = 88 + thr * 75 + spd * 1.1;
       lerp(oscA.frequency, f, dt, 5);
       lerp(oscB.frequency, f * 2.03, dt, 5);
+
+      // Water: near the lake's edge and low, a faint damp ripple bed plus
+      // irregular wavelet laps and sparse plips; downwash spray when
+      // skimming the surface — strongest under ~3m, gone by ~8m.
+      lerp(shoreGain.gain, 0.06 * shore, dt, 1.5);
+      lapTimer -= dt;
+      if (shore > 0.04 && lapTimer <= 0) {
+        playLap(Math.min(1, shore * 1.6));
+        lapTimer = 0.5 + Math.random() * 2.2;
+      }
+      plipTimer -= dt;
+      if (shore > 0.1 && plipTimer <= 0) {
+        if (Math.random() < 0.7) playPlip(Math.min(1, shore * 1.5));
+        plipTimer = 1.5 + Math.random() * 4;
+      }
+      const skim = overWater ? Math.max(0, Math.min(1, 1 - (waterH - 1) / 7)) : 0;
+      const sprayTarget = Math.min(0.24, skim * (thr * 0.18 + spd * 0.005));
+      lerp(sprayGain.gain, sprayTarget, dt, 4);
+      lerp(sprayFilter.frequency, 1200 + spd * 25, dt, 3);
 
       // Birds live near the ground and trees; they go quiet at speed.
       birdTimer -= dt;

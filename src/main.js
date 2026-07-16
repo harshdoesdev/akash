@@ -11,6 +11,8 @@ import { createDayNight } from './dayNight.js';
 import { createFireflies } from './fireflies.js';
 import { createDust } from './dust.js';
 import { createWindLeaves } from './windLeaves.js';
+import { createWindways } from './windways.js';
+import { createRace } from './race.js';
 import { hashSeed } from './rng.js';
 import { createGrass } from './grass.js';
 import { createSky } from './sky.js';
@@ -19,6 +21,7 @@ import { ChaseCamera } from './chaseCamera.js';
 import { PALETTE } from './palette.js';
 import { loadAssets } from './assets.js';
 import { createUI } from './ui.js';
+import { createTouchControls } from './touchControls.js';
 
 // Boot: every asset loads before the world builds or the loop starts —
 // nothing pops in late. The boot screen fades after the first real frame.
@@ -84,12 +87,17 @@ const dayNight = createDayNight({
 const fireflies = createFireflies(scene, terrain.heightAt);
 const dust = createDust(scene, terrain.heightAt);
 const windLeaves = createWindLeaves(scene, terrain.heightAt, world.colliders, scene.fog);
+const windways = createWindways(scene, terrain.heightAt, worldSeed);
 const ui = createUI({ audio, seedStr });
+const race = createRace(scene, windways.list, drone, seedStr);
+createTouchControls();
 window.drone = drone; // dev: live tuning/inspection from the console
 window.renderer = renderer;
 window.surfaceAt = surfaceAt;
 window.critters = critters;
 window.sky = sky;
+window.windways = windways;
+window.race = race;
 
 const hud = document.getElementById('hud');
 document.getElementById('controls').insertAdjacentText('beforeend', `  ·  world: ${seedStr}`);
@@ -99,6 +107,21 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// Water proximity: a ring of terrain probes around the drone, refreshed a
+// few times a second — drives the shore-lapping ambience.
+let waterFrac = 0;
+let waterProbeTimer = 0;
+function probeWater() {
+  const px = drone.position.x;
+  const pz = drone.position.z;
+  let hits = terrain.heightAt(px, pz) < WATER_LEVEL ? 1 : 0;
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    if (terrain.heightAt(px + Math.cos(a) * 30, pz + Math.sin(a) * 30) < WATER_LEVEL) hits++;
+  }
+  waterFrac = hits / 13;
+}
 
 const clock = new THREE.Timer();
 let hudTimer = 0;
@@ -155,17 +178,20 @@ renderer.setAnimationLoop(() => {
   const playing = ui.state === 'playing';
   const input = playing ? readInput() : ZERO_INPUT;
   drone.update(dt, input);
+  windways.update(dt, time, drone, playing, camera.position);
+  race.update(dt, time, playing, camera.position);
   if (ui.cameraMode === 'chase') chaseCam.update(dt, drone);
   else cinematicCamera(dt);
   grass.update(time, drone.position, drone.throttleVisual);
   sky.update(dt, drone.position);
+  const overWater = terrain.heightAt(drone.position.x, drone.position.z) < WATER_LEVEL;
   water.update(time, dt, {
     x: drone.position.x,
     z: drone.position.z,
     y: drone.position.y,
     vx: drone.velocity.x,
     vz: drone.velocity.z,
-    overWater: terrain.heightAt(drone.position.x, drone.position.z) < WATER_LEVEL,
+    overWater,
     throttle: drone.throttleVisual,
   });
   windOverlay.update(time);
@@ -181,11 +207,21 @@ renderer.setAnimationLoop(() => {
   });
   critters.update(dt, time, drone.position,
     drone.position.y - surfaceAt(drone.position.x, drone.position.z));
+  waterProbeTimer -= dt;
+  if (waterProbeTimer <= 0) {
+    waterProbeTimer = 0.25;
+    probeWater();
+  }
+  const waterH = drone.position.y - WATER_LEVEL;
   audio.update(dt, {
     speed: drone.speed,
     throttle: drone.throttleVisual,
     agl: drone.position.y - surfaceAt(drone.position.x, drone.position.z),
     flying: playing, // menus: motor silent, wind calm
+    camDist: camera.position.distanceTo(drone.position),
+    shore: waterFrac * Math.max(0, 1 - waterH / 35),
+    overWater,
+    waterH,
   });
 
   // Shadow camera follows the drone so shadows stay crisp anywhere on the map.

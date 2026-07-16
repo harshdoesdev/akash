@@ -31,6 +31,41 @@
       #controls { bottom: 16px; font-size: 12px; color: rgba(255, 255, 255, 0.75); }
       body.in-game #hud, body.in-game #controls { opacity: 1; }
 
+      /* ---- Racing: lap timer top-center, one airy message line below ---- */
+      #race-hud {
+        position: fixed;
+        top: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-size: 14px;
+        letter-spacing: 0.06em;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        user-select: none;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+      }
+      body.in-game #race-hud.active { opacity: 1; }
+      #race-msg {
+        position: fixed;
+        top: 24%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-family: ui-rounded, "Hiragino Maru Gothic ProN", Quicksand, Avenir, sans-serif;
+        font-size: 17px;
+        letter-spacing: 0.26em;
+        text-indent: 0.26em;
+        color: #fff;
+        text-shadow: 0 2px 14px rgba(20, 50, 90, 0.6);
+        user-select: none;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+      body.in-game #race-msg.show { opacity: 1; }
+
       /* ---- Screen system: overlays crossfading over the live world ---- */
       .screen {
         position: fixed;
@@ -172,6 +207,101 @@
         accent-color: #eaf6e2;
       }
 
+      /* Small corner fullscreen toggle — icon + quiet label, not a pill. */
+      .fs-toggle {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: ui-rounded, "Hiragino Maru Gothic ProN", Quicksand, Avenir, sans-serif;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: rgba(255, 255, 255, 0.85);
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-top-color: rgba(255, 255, 255, 0.5);
+        border-radius: 9px;
+        padding: 7px 11px;
+        cursor: pointer;
+        transition: opacity 0.3s ease, background 0.15s ease;
+      }
+      .fs-toggle:hover { background: rgba(255, 255, 255, 0.28); }
+      .fs-toggle svg { width: 13px; height: 13px; display: block; }
+      body.in-game .fs-toggle { opacity: 0; pointer-events: none; }
+
+      /* ---- Touch controls: dual virtual sticks + pause/reset ---- */
+      #touch-ui { display: none; }
+      body.touch.in-game #touch-ui { display: block; }
+      body.touch #controls { display: none; } /* keyboard hints are noise on touch */
+      .stick {
+        position: fixed;
+        bottom: 30px;
+        width: 116px;
+        height: 116px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: none;
+        z-index: 4;
+      }
+      #stick-left { left: 30px; }
+      #stick-right { right: 30px; }
+      .stick .nub {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        pointer-events: none;
+      }
+      .touch-btns {
+        position: fixed;
+        top: 14px;
+        right: 14px;
+        display: flex;
+        gap: 10px;
+        z-index: 4;
+      }
+      .touch-btns button {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        font-size: 16px;
+        color: #fff;
+        background: rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+
+      /* Portrait on a touch device: the game is a landscape film. */
+      #rotate-hint { display: none; }
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate-hint {
+          position: fixed;
+          inset: 0;
+          z-index: 30;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 14px;
+          background: linear-gradient(180deg, #2e6ac8 0%, #9fd2e8 58%, #d7e7cf 100%);
+          color: #fff;
+          font-family: ui-rounded, "Hiragino Maru Gothic ProN", Quicksand, Avenir, sans-serif;
+          font-size: 18px;
+          letter-spacing: 0.22em;
+          text-indent: 0.22em;
+          text-shadow: 0 2px 14px rgba(20, 50, 90, 0.5);
+        }
+        #rotate-hint .turn { font-size: 44px; }
+      }
+
       /* ---- Boot screen (asset preload) ---- */
       #boot {
         position: fixed;
@@ -252,6 +382,8 @@
   <body>
     <div id="app"></div>
     <div id="hud"></div>
+    <div id="race-hud"></div>
+    <div id="race-msg"></div>
     <div id="controls">
       W/S forward/back &nbsp; A/D turn &nbsp; ←/→ strafe &nbsp; SPACE up &nbsp; SHIFT down &nbsp; R reset &nbsp; M sound &nbsp; N (hold) time &nbsp; F fullscreen &nbsp; ESC menu
     </div>
@@ -293,15 +425,37 @@
           <div class="panel-title">sound</div>
           <div class="slider-row"><label>master</label><input type="range" min="0" max="100" data-bus="master" /></div>
           <div class="slider-row"><label>drone</label><input type="range" min="0" max="100" data-bus="drone" /></div>
-          <div class="slider-row"><label>ambience</label><input type="range" min="0" max="100" data-bus="ambience" /></div>
+          <div class="slider-row"><label>wind</label><input type="range" min="0" max="100" data-bus="wind" /></div>
+          <div class="slider-row"><label>nature</label><input type="range" min="0" max="100" data-bus="ambience" /></div>
           <div class="slider-row"><label>music</label><input type="range" min="0" max="100" data-bus="bgm" /></div>
           <div class="panel-buttons" style="margin-top: 20px;">
-            <button id="btn-fullscreen">fullscreen</button>
             <button id="btn-settings-back">back</button>
           </div>
         </div>
       </div>
     </div>
+
+    <div id="touch-ui">
+      <div class="stick" id="stick-left"><div class="nub"></div></div>
+      <div class="stick" id="stick-right"><div class="nub"></div></div>
+      <div class="touch-btns">
+        <button id="tb-pause" aria-label="Pause">&#10073;&#10073;</button>
+        <button id="tb-reset" aria-label="Reset drone">&#10227;</button>
+      </div>
+    </div>
+    <div id="rotate-hint"><span class="turn">&#8634;</span>rotate your device</div>
+
+    <!-- Fullscreen toggle: one small corner control, lives on every overlay
+         screen (menu / paused / settings), hidden while flying. -->
+    <button id="btn-fs" class="fs-toggle" aria-label="Toggle fullscreen">
+      <svg class="fs-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 8V3h5" /><path d="M16 3h5v5" /><path d="M21 16v5h-5" /><path d="M8 21H3v-5" />
+      </svg>
+      <svg class="fs-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display: none">
+        <path d="M8 3v5H3" /><path d="M21 8h-5V3" /><path d="M16 21v-5h5" /><path d="M3 16h5v5" />
+      </svg>
+      <span>fullscreen</span>
+    </button>
 
     <div id="boot">
       <div id="boot-inner">

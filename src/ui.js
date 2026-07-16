@@ -1,6 +1,8 @@
 // Screen system: plain DOM sections crossfaded over the live canvas.
 // States: menu | playing | paused | settings. The world always renders —
 // the main menu's "art" is the game itself under a slow cinematic camera.
+import { isTouch, lockLandscape } from './touchControls.js';
+
 export function createUI({ audio, seedStr }) {
   const screens = {};
   for (const el of document.querySelectorAll('.screen')) {
@@ -36,6 +38,8 @@ export function createUI({ audio, seedStr }) {
   // Buttons.
   document.getElementById('btn-fly').addEventListener('click', () => {
     audio.start(); // user gesture — autoplay-safe
+    // Mobile: go fullscreen + landscape while we still have the gesture.
+    if (isTouch()) lockLandscape();
     setState('playing');
   });
   document.getElementById('btn-settings').addEventListener('click', () => {
@@ -59,15 +63,21 @@ export function createUI({ audio, seedStr }) {
     });
   }
 
-  // Fullscreen: settings button + F anywhere.
-  const fsBtn = document.getElementById('btn-fullscreen');
+  // Fullscreen: the corner toggle (visible on every overlay screen) + F.
+  const fsBtn = document.getElementById('btn-fs');
+  const fsLabel = fsBtn.querySelector('span');
+  const fsEnter = fsBtn.querySelector('.fs-enter');
+  const fsExit = fsBtn.querySelector('.fs-exit');
   const toggleFullscreen = () => {
     if (document.fullscreenElement) document.exitFullscreen();
     else document.documentElement.requestFullscreen().catch(() => {});
   };
   fsBtn.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', () => {
-    fsBtn.textContent = document.fullscreenElement ? 'exit fullscreen' : 'fullscreen';
+    const on = !!document.fullscreenElement;
+    fsLabel.textContent = on ? 'exit fullscreen' : 'fullscreen';
+    fsEnter.style.display = on ? 'none' : '';
+    fsExit.style.display = on ? '' : 'none';
   });
 
   // ESC walks the state graph; F toggles fullscreen.

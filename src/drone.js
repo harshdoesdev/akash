@@ -33,7 +33,7 @@ function toonGradient() {
   return tex;
 }
 
-function buildDroneMesh() {
+export function buildDroneMesh() {
   const group = new THREE.Group();
   const gradient = toonGradient();
   const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
