@@ -2,6 +2,10 @@
 // States: menu | playing | paused | settings. The world always renders —
 // the main menu's "art" is the game itself under a slow cinematic camera.
 import { isTouch, lockLandscape } from './touchControls.js';
+import {
+  fullscreenSupported, fullscreenActive, enterFullscreen, exitFullscreen,
+  onFullscreenChange,
+} from './fullscreen.js';
 
 export function createUI({ audio, seedStr }) {
   const screens = {};
@@ -64,21 +68,26 @@ export function createUI({ audio, seedStr }) {
   }
 
   // Fullscreen: the corner toggle (visible on every overlay screen) + F.
+  // On iPhone there is no page fullscreen API at all — hide the control.
   const fsBtn = document.getElementById('btn-fs');
-  const fsLabel = fsBtn.querySelector('span');
-  const fsEnter = fsBtn.querySelector('.fs-enter');
-  const fsExit = fsBtn.querySelector('.fs-exit');
   const toggleFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen().catch(() => {});
+    if (fullscreenActive()) exitFullscreen();
+    else enterFullscreen().catch(() => {});
   };
-  fsBtn.addEventListener('click', toggleFullscreen);
-  document.addEventListener('fullscreenchange', () => {
-    const on = !!document.fullscreenElement;
-    fsLabel.textContent = on ? 'exit fullscreen' : 'fullscreen';
-    fsEnter.style.display = on ? 'none' : '';
-    fsExit.style.display = on ? '' : 'none';
-  });
+  if (!fullscreenSupported) {
+    fsBtn.style.display = 'none';
+  } else {
+    const fsLabel = fsBtn.querySelector('span');
+    const fsEnter = fsBtn.querySelector('.fs-enter');
+    const fsExit = fsBtn.querySelector('.fs-exit');
+    fsBtn.addEventListener('click', toggleFullscreen);
+    onFullscreenChange(() => {
+      const on = fullscreenActive();
+      fsLabel.textContent = on ? 'exit fullscreen' : 'fullscreen';
+      fsEnter.style.display = on ? 'none' : '';
+      fsExit.style.display = on ? '' : 'none';
+    });
+  }
 
   // ESC walks the state graph; F toggles fullscreen.
   window.addEventListener('keydown', (e) => {

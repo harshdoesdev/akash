@@ -71,8 +71,11 @@ export function createTouchControls() {
 
 // Best-effort landscape: needs fullscreen first, and iOS ignores the lock
 // entirely (the portrait overlay covers that case).
+import { fullscreenSupported, enterFullscreen } from './fullscreen.js';
+
 export function lockLandscape() {
-  const el = document.documentElement;
-  const fs = el.requestFullscreen ? el.requestFullscreen() : Promise.reject();
-  fs.then(() => screen.orientation?.lock?.('landscape')).catch(() => {});
+  if (!fullscreenSupported) return; // iPhone: nothing to do
+  enterFullscreen()
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .catch(() => {});
 }
