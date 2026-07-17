@@ -155,6 +155,16 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
   }
   nameEl.addEventListener('change', commitPilot);
 
+  // Pencil buttons: a visible "this is editable" affordance — clicking one
+  // drops the caret into its field and selects the text.
+  for (const pencil of document.querySelectorAll('.mw-pencil')) {
+    pencil.addEventListener('click', () => {
+      const input = document.getElementById(pencil.dataset.edits);
+      input.focus();
+      input.select();
+    });
+  }
+
   // Volume sliders — live while dragging, persisted by audio.setVolume.
   for (const input of document.querySelectorAll('#screen-settings input[type=range]')) {
     const bus = input.dataset.bus;
