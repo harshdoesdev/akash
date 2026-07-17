@@ -126,8 +126,10 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
   // record (multiplayer reconnects so others see it).
   const nameEl = document.getElementById('pilot-name');
   const colorsEl = document.getElementById('pilot-colors');
+  const swatchEl = document.getElementById('pilot-swatch');
   nameEl.value = localStorage.getItem('akash.pilot.name') || '';
   let pilotColor = localStorage.getItem('akash.pilot.color') || PILOT_COLORS[0];
+  swatchEl.style.background = pilotColor;
   function commitPilot() {
     const name = nameEl.value.trim().slice(0, 14);
     localStorage.setItem('akash.pilot.name', name);
@@ -140,6 +142,17 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
       })
       .catch((err) => console.warn('pilot profile: offline?', err.message));
   }
+  // The swatch shows your color; clicking it floats the palette above the
+  // pill (a popover — the layout never shifts). Pick a dot, it closes.
+  swatchEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    colorsEl.classList.toggle('open');
+  });
+  window.addEventListener('pointerdown', (e) => {
+    if (!colorsEl.contains(e.target) && e.target !== swatchEl) {
+      colorsEl.classList.remove('open');
+    }
+  });
   for (const c of PILOT_COLORS) {
     const dot = document.createElement('button');
     dot.className = 'color-dot';
@@ -148,15 +161,17 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
     dot.classList.toggle('sel', c === pilotColor);
     dot.addEventListener('click', () => {
       pilotColor = c;
+      swatchEl.style.background = c;
       for (const d of colorsEl.children) d.classList.toggle('sel', d === dot);
+      colorsEl.classList.remove('open');
       commitPilot();
     });
     colorsEl.appendChild(dot);
   }
   nameEl.addEventListener('change', commitPilot);
 
-  // Pencil buttons: a visible "this is editable" affordance — clicking one
-  // drops the caret into its field and selects the text.
+  // Pencil: a visible "this is editable" affordance — drops the caret into
+  // the world-code field and selects it.
   for (const pencil of document.querySelectorAll('.mw-pencil')) {
     pencil.addEventListener('click', () => {
       const input = document.getElementById(pencil.dataset.edits);

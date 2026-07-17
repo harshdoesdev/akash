@@ -164,44 +164,63 @@
         background: rgba(255, 255, 255, 0.38);
         transform: translateY(-1px);
       }
-      /* Identity card: who you are + which sky, front and center under the
-         buttons — one light glass card, still airy, never chunky. */
-      .menu-id-card {
-        margin: 22px auto 0;
-        display: inline-block;
-        padding: 16px 26px 14px;
-        background: rgba(255, 255, 255, 0.16);
-        border: 1px solid rgba(255, 255, 255, 0.35);
-        border-top-color: rgba(255, 255, 255, 0.55);
-        border-radius: 20px;
-        box-shadow: 0 8px 30px rgba(20, 50, 90, 0.16);
-      }
-      .menu-pilot {
-        display: flex;
-        gap: 12px;
-        justify-content: center;
+      /* Pilot pill: round color swatch + name in one glass pill right above
+         fly (agar-style). The palette opens as a floating popover so the
+         layout never shifts. */
+      .pilot-pill {
+        position: relative;
+        display: inline-flex;
         align-items: center;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding: 6px 18px 6px 7px;
+        background: rgba(255, 255, 255, 0.26);
+        border: 1px solid rgba(255, 255, 255, 0.45);
+        border-top-color: rgba(255, 255, 255, 0.65);
+        border-radius: 99px;
+        box-shadow: 0 6px 24px rgba(20, 50, 90, 0.18);
+      }
+      .pilot-swatch {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        cursor: pointer;
+        padding: 0;
+        box-shadow: 0 1px 6px rgba(20, 50, 90, 0.3);
+        transition: transform 0.15s ease;
+      }
+      .pilot-swatch:hover { transform: scale(1.1); }
+      .pilot-pill input {
+        font: inherit;
         font-size: 14px;
         letter-spacing: 0.18em;
-      }
-      .menu-pilot input {
-        font: inherit;
+        text-indent: 0.18em;
         text-align: center;
+        width: 140px;
         color: #fff;
         text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
         background: none;
         border: none;
-        border-bottom: 1px dotted rgba(255, 255, 255, 0.5);
-        padding: 0 2px 2px;
-        width: 140px;
         outline: none;
-        transition: border-color 0.15s ease;
       }
-      .menu-pilot input:hover, .menu-pilot input:focus {
-        border-bottom-color: rgba(255, 255, 255, 0.95);
+      .pilot-pill input::placeholder { color: rgba(255, 255, 255, 0.6); }
+      .pilot-palette {
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 10px);
+        transform: translateX(-50%);
+        display: none;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 14px;
+        background: rgba(255, 255, 255, 0.32);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-top-color: rgba(255, 255, 255, 0.7);
+        border-radius: 99px;
+        box-shadow: 0 8px 30px rgba(20, 50, 90, 0.22);
       }
-      .menu-pilot input::placeholder { color: rgba(255, 255, 255, 0.6); }
-      .pilot-colors { display: inline-flex; gap: 9px; align-items: center; }
+      .pilot-palette.open { display: inline-flex; }
       .color-dot {
         width: 16px;
         height: 16px;
@@ -217,16 +236,17 @@
       .color-dot:hover { transform: scale(1.2); }
       .color-dot.sel { outline-color: rgba(255, 255, 255, 0.95); }
 
-      /* World-code line: the code itself is editable (enter to fly there),
-         "new" and "invite" are bare text actions. */
+      /* World line: quiet text under the buttons — the code is editable
+         (enter to fly there), "new" and "invite" are bare text actions.
+         invite reserves its widest label so "copied ✓" can't shift it. */
       .menu-world {
-        margin-top: 12px;
+        margin-top: 24px;
         display: flex;
-        gap: 9px;
+        gap: 8px;
         justify-content: center;
         align-items: baseline;
-        font-size: 13px;
-        letter-spacing: 0.18em;
+        font-size: 12px;
+        letter-spacing: 0.2em;
         color: rgba(255, 255, 255, 0.8);
       }
       .menu-world input {
@@ -244,6 +264,8 @@
       .menu-world input:hover, .menu-world input:focus {
         border-bottom-color: rgba(255, 255, 255, 0.95);
       }
+      .mw-label { color: rgba(255, 255, 255, 0.55); }
+      .mw-invite { min-width: 9ch; text-align: left; }
       .mw-pencil {
         align-self: center;
         background: none;
@@ -397,11 +419,11 @@
           width: 190px;
           font-size: 13px;
         }
-        .menu-id-card { margin-top: 8px; padding: 9px 16px 8px; border-radius: 14px; }
-        .menu-pilot { font-size: 11px; }
-        .menu-pilot input { width: 110px; }
-        .color-dot { width: 12px; height: 12px; }
-        .menu-world { margin-top: 6px; font-size: 11px; }
+        .pilot-pill { margin-bottom: 8px; padding: 4px 14px 4px 5px; }
+        .pilot-pill input { font-size: 12px; width: 120px; }
+        .pilot-swatch { width: 24px; height: 24px; }
+        .color-dot { width: 13px; height: 13px; }
+        .menu-world { margin-top: 10px; font-size: 10px; }
         .menu-online { margin-top: 5px; font-size: 10px; min-height: 12px; }
         .alpha-pill { display: none; }
         .panel-card { padding: 16px 28px; min-width: 280px; }
@@ -526,32 +548,28 @@
           <img class="brand-wordmark" src="./branding/akash-logo-text.png" alt="Akash logo" />
         </div>
         <div class="menu-sub">a sky stroll</div>
+        <div class="pilot-pill">
+          <button id="pilot-swatch" class="pilot-swatch" title="drone color" aria-label="drone color"></button>
+          <input id="pilot-name" maxlength="14" spellcheck="false" autocomplete="off"
+            placeholder="name" aria-label="pilot name" />
+          <div class="pilot-palette" id="pilot-colors" aria-label="drone color choices"></div>
+        </div>
         <div class="menu-buttons">
           <button id="btn-fly">fly</button>
           <button id="btn-settings">settings</button>
         </div>
-        <div class="menu-id-card">
-          <div class="menu-pilot">
-            <input id="pilot-name" maxlength="14" spellcheck="false" autocomplete="off"
-              placeholder="your name" aria-label="pilot name" />
-            <button class="mw-pencil" data-edits="pilot-name" title="edit your name" aria-label="edit your name">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-            </button>
-            <span class="pilot-colors" id="pilot-colors" aria-label="drone color"></span>
-          </div>
-          <div class="menu-world">
-            <span class="mw-label">world</span>
-            <input id="world-code" spellcheck="false" autocomplete="off" maxlength="24"
-              aria-label="world code" title="type any code and press enter to fly there" />
-            <button class="mw-pencil" data-edits="world-code" title="type any code and press enter to fly there" aria-label="edit world code">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-            </button>
-            <button id="btn-world-reroll" class="mw-link" title="fly somewhere new">new</button>
-            <span class="mw-dot">&middot;</span>
-            <button id="btn-world-copy" class="mw-link" title="copy an invite for a friend">invite</button>
-          </div>
-          <div class="menu-online" id="menu-online"></div>
+        <div class="menu-world">
+          <span class="mw-label">world</span>
+          <input id="world-code" spellcheck="false" autocomplete="off" maxlength="24"
+            aria-label="world code" title="type any code and press enter to fly there" />
+          <button class="mw-pencil" data-edits="world-code" title="type any code and press enter to fly there" aria-label="edit world code">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
+          <button id="btn-world-reroll" class="mw-link" title="fly somewhere new">new</button>
+          <span class="mw-dot">&middot;</span>
+          <button id="btn-world-copy" class="mw-link mw-invite" title="copy an invite for a friend">invite</button>
         </div>
+        <div class="menu-online" id="menu-online"></div>
       </div>
       <div class="alpha-pill">alpha build</div>
     </div>
