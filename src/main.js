@@ -111,7 +111,7 @@ const windLeaves = createWindLeaves(scene, terrain.heightAt, world.colliders, sc
 const windways = createWindways(scene, terrain.heightAt, worldSeed);
 // Freeroam presence: everyone flying this world code shares a sky.
 const multiplayer = createMultiplayer(scene, seedStr, drone, () => ui.state === 'playing', camera);
-const ui = createUI({ audio, seedStr, multiplayer });
+const ui = createUI({ audio, seedStr, multiplayer, drone });
 const race = createRace(scene, windways.list, drone, seedStr);
 createTouchControls();
 window.drone = drone; // dev: live tuning/inspection from the console

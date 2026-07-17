@@ -186,18 +186,19 @@ export function buildDroneMesh({ bodyColor } = {}) {
     discs.push(disc);
   }
 
-  return { group, props, discs };
+  return { group, props, discs, bodyMat: cream };
 }
 
 export class Drone {
   constructor(scene, heightAt = () => 0, colliders = [], bodyColor = null) {
-    const { group, props, discs } = buildDroneMesh({ bodyColor });
+    const { group, props, discs, bodyMat } = buildDroneMesh({ bodyColor });
     // Physics owns this.mesh; this.visual carries hover-bob/wobble on top.
     this.visual = group;
     this.mesh = new THREE.Group();
     this.mesh.add(this.visual);
     this.props = props;
     this.discs = discs;
+    this.bodyMat = bodyMat;
     scene.add(this.mesh);
 
     this.heightAt = heightAt;
@@ -213,6 +214,11 @@ export class Drone {
     this.time = 0;
     this.throttleVisual = 0;
     this.reset();
+  }
+
+  // Live pilot-color change from the menu — tints the cream body panels.
+  setBodyColor(color) {
+    this.bodyMat.color.set(color || 0xf2ead8);
   }
 
   reset() {

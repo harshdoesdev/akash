@@ -175,7 +175,7 @@ export function createMultiplayer(scene, worldCode, drone, isPlaying, camera) {
       ws = null;
       connecting = false;
       if (closed) return;
-      if (e.code === 4002) return; // superseded by a newer tab — stand down
+      if (e.code === 4002) return; // too many tabs from this pilot — stand down
       // The relay or the network blinked — retry with backoff, forever.
       setTimeout(connect, retryS * 1000 * (0.7 + Math.random() * 0.6));
       retryS = Math.min(retryS * 2, 15);

@@ -13,7 +13,7 @@ export const PILOT_COLORS = [
   '#f2ead8', '#8fd0ff', '#a8d977', '#f2a06b', '#b9a8e8', '#f2a0b4', '#f2d878',
 ];
 
-export function createUI({ audio, seedStr, multiplayer }) {
+export function createUI({ audio, seedStr, multiplayer, drone }) {
   const screens = {};
   for (const el of document.querySelectorAll('.screen')) {
     screens[el.dataset.screen] = el;
@@ -121,8 +121,9 @@ export function createUI({ audio, seedStr, multiplayer }) {
   document.getElementById('btn-main-menu').addEventListener('click', () => setState('menu'));
   document.getElementById('btn-settings-back').addEventListener('click', () => setState(settingsReturn));
 
-  // Pilot identity: name + drone color, saved locally for instant use and
-  // pushed to the pilot's server record (multiplayer reconnects to show it).
+  // Pilot identity on the main menu: name + drone color. Applied to your own
+  // drone immediately, saved locally, and pushed to the pilot's server
+  // record (multiplayer reconnects so others see it).
   const nameEl = document.getElementById('pilot-name');
   const colorsEl = document.getElementById('pilot-colors');
   nameEl.value = localStorage.getItem('akash.pilot.name') || '';
@@ -131,6 +132,7 @@ export function createUI({ audio, seedStr, multiplayer }) {
     const name = nameEl.value.trim().slice(0, 14);
     localStorage.setItem('akash.pilot.name', name);
     localStorage.setItem('akash.pilot.color', pilotColor);
+    if (drone) drone.setBodyColor(pilotColor);
     pushProfile({ name, color: pilotColor })
       .then((ok) => {
         if (ok && multiplayer) multiplayer.refresh();

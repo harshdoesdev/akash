@@ -69,7 +69,7 @@ const MAX_ROOM = 24;      // pilots per sky
 const MAX_MSG = 512;      // bytes; poses are ~60
 const REAP_MS = 60_000;   // no pose and no pong for this long → gone
 
-const rooms = new Map(); // room → Map<userId, {ws, pose, seen, name, color}>
+const rooms = new Map(); // room → Map<connId, {ws, uid, pose, seen, name, color}>
 const authHandler = toNodeHandler(auth);
 
 const CORS_HEADERS = {
@@ -142,18 +142,21 @@ function broadcast(room, exceptId, msg) {
 }
 
 wss.on('connection', (ws, roomKey, ident) => {
-  const { uid: id, name, color } = ident;
+  const { uid, name, color } = ident;
 
   let room = rooms.get(roomKey);
   if (!room) rooms.set(roomKey, (room = new Map()));
 
-  // Same pilot reconnecting (new tab, identity change) supersedes the old
-  // socket — one drone per pilot per sky.
-  const prior = room.get(id);
-  if (prior) prior.ws.close(4002, 'superseded');
-  else if (room.size >= MAX_ROOM) return ws.close(4001, 'room full');
+  // Each connection is its own drone (two tabs = two drones — identity is
+  // still ticket-authenticated, which is the part that matters). A small
+  // per-pilot cap keeps one browser from filling a sky.
+  let mine = 0;
+  for (const peer of room.values()) if (peer.uid === uid) mine++;
+  if (mine >= 3) return ws.close(4002, 'too many tabs');
+  if (room.size >= MAX_ROOM) return ws.close(4001, 'room full');
 
-  const me = { ws, pose: null, seen: Date.now(), name, color };
+  const id = `${uid.slice(0, 8)}:${crypto.randomBytes(3).toString('hex')}`;
+  const me = { ws, uid, pose: null, seen: Date.now(), name, color };
   room.set(id, me);
 
   ws.send(JSON.stringify({
@@ -177,7 +180,6 @@ wss.on('connection', (ws, roomKey, ident) => {
   ws.on('pong', () => { me.seen = Date.now(); });
 
   ws.on('close', () => {
-    if (room.get(id) !== me) return; // superseded — the new socket owns the id
     room.delete(id);
     if (room.size === 0) rooms.delete(roomKey);
     else broadcast(room, id, { t: 'bye', id });
