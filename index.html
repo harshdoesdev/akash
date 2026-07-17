@@ -191,13 +191,19 @@
         transition: transform 0.15s ease;
       }
       .pilot-swatch:hover { transform: scale(1.1); }
+      .pp-label {
+        margin-left: 5px;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        white-space: nowrap;
+        color: rgba(255, 255, 255, 0.65);
+      }
       .pilot-pill input {
         font: inherit;
         font-size: 14px;
-        letter-spacing: 0.18em;
-        text-indent: 0.18em;
-        text-align: center;
-        width: 140px;
+        letter-spacing: 0.14em;
+        text-align: left;
+        width: 108px;
         color: #fff;
         text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
         background: none;
@@ -205,20 +211,24 @@
         outline: none;
       }
       .pilot-pill input::placeholder { color: rgba(255, 255, 255, 0.6); }
+      .pp-pencil { margin-right: 4px; }
+      /* Popovers float over other text, so their glass is near-opaque dusk
+         blue (no backdrop-filter — it costs real compositing time). */
       .pilot-palette {
         position: absolute;
         left: 50%;
         bottom: calc(100% + 10px);
         transform: translateX(-50%);
+        z-index: 3;
         display: none;
         gap: 10px;
         align-items: center;
         padding: 10px 14px;
-        background: rgba(255, 255, 255, 0.32);
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        border-top-color: rgba(255, 255, 255, 0.7);
+        background: rgba(36, 58, 92, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-top-color: rgba(255, 255, 255, 0.45);
         border-radius: 99px;
-        box-shadow: 0 8px 30px rgba(20, 50, 90, 0.22);
+        box-shadow: 0 8px 30px rgba(20, 50, 90, 0.3);
       }
       .pilot-palette.open { display: inline-flex; }
       .color-dot {
@@ -242,13 +252,39 @@
       .menu-world {
         margin-top: 24px;
         display: flex;
-        gap: 8px;
+        gap: 9px;
         justify-content: center;
         align-items: baseline;
-        font-size: 12px;
+        font-size: 14px;
         letter-spacing: 0.2em;
-        color: rgba(255, 255, 255, 0.8);
+        color: rgba(255, 255, 255, 0.85);
       }
+      .invite-wrap { position: relative; }
+      .invite-pop {
+        position: absolute;
+        left: 50%;
+        top: calc(100% + 9px);
+        transform: translateX(-50%);
+        z-index: 3;
+        display: none;
+        flex-direction: column;
+        gap: 9px;
+        padding: 11px 18px;
+        white-space: nowrap;
+        background: rgba(36, 58, 92, 0.88);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-top-color: rgba(255, 255, 255, 0.45);
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(20, 50, 90, 0.3);
+      }
+      .invite-pop.open { display: flex; }
+      .invite-pop .mw-link {
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .invite-pop .mw-link svg { width: 12px; height: 12px; flex: none; opacity: 0.8; }
       .menu-world input {
         font: inherit;
         color: #fff;
@@ -271,7 +307,7 @@
         background: none;
         border: none;
         padding: 0;
-        margin-left: -4px;
+        margin-left: -7px; /* hug the field it edits, not the next action */
         cursor: pointer;
         color: rgba(255, 255, 255, 0.65);
         transition: color 0.15s ease, transform 0.15s ease;
@@ -420,10 +456,11 @@
           font-size: 13px;
         }
         .pilot-pill { margin-bottom: 8px; padding: 4px 14px 4px 5px; }
-        .pilot-pill input { font-size: 12px; width: 120px; }
+        .pilot-pill input { font-size: 12px; width: 100px; }
+        .pp-label { font-size: 9px; }
         .pilot-swatch { width: 24px; height: 24px; }
         .color-dot { width: 13px; height: 13px; }
-        .menu-world { margin-top: 10px; font-size: 10px; }
+        .menu-world { margin-top: 10px; font-size: 11px; }
         .menu-online { margin-top: 5px; font-size: 10px; min-height: 12px; }
         .alpha-pill { display: none; }
         .panel-card { padding: 16px 28px; min-width: 280px; }
@@ -550,8 +587,12 @@
         <div class="menu-sub">a sky stroll</div>
         <div class="pilot-pill">
           <button id="pilot-swatch" class="pilot-swatch" title="drone color" aria-label="drone color"></button>
+          <span class="pp-label">playing as</span>
           <input id="pilot-name" maxlength="14" spellcheck="false" autocomplete="off"
             placeholder="name" aria-label="pilot name" />
+          <button class="mw-pencil pp-pencil" data-edits="pilot-name" title="edit your name" aria-label="edit your name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+          </button>
           <div class="pilot-palette" id="pilot-colors" aria-label="drone color choices"></div>
         </div>
         <div class="menu-buttons">
@@ -565,9 +606,22 @@
           <button class="mw-pencil" data-edits="world-code" title="type any code and press enter to fly there" aria-label="edit world code">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
           </button>
+          <span class="mw-dot">&middot;</span>
           <button id="btn-world-reroll" class="mw-link" title="fly somewhere new">new</button>
           <span class="mw-dot">&middot;</span>
-          <button id="btn-world-copy" class="mw-link mw-invite" title="copy an invite for a friend">invite</button>
+          <span class="invite-wrap">
+            <button id="btn-world-copy" class="mw-link mw-invite" title="invite a friend to this sky">invite</button>
+            <div class="invite-pop" id="invite-pop">
+              <button id="btn-copy-link" class="mw-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span>copy link</span>
+              </button>
+              <button id="btn-copy-code" class="mw-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>
+                <span>copy code</span>
+              </button>
+            </div>
+          </span>
         </div>
         <div class="menu-online" id="menu-online"></div>
       </div>

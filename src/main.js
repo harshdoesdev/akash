@@ -286,7 +286,7 @@ renderer.setAnimationLoop(() => {
     if (onlineEl) {
       onlineEl.textContent = others
         ? `${others} pilot${others > 1 ? 's' : ''} flying this sky with you`
-        : '';
+        : 'share the world code — friends who enter it fly this sky with you';
     }
   }
 

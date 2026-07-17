@@ -86,13 +86,24 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
     ta.remove();
     return ok;
   }
+  // Invite: a small popover with two flavors. "copy link" carries its own
+  // instructions when a plain URL can't auto-join (itch's iframe drops query
+  // params, so there the link is the game page + the code to type).
   const copyBtn = document.getElementById('btn-world-copy');
-  copyBtn.addEventListener('click', async () => {
-    const inIframe = window.self !== window.top;
-    const invite = inIframe
-      ? seedStr
-      : `${location.origin}${location.pathname}?seed=${encodeURIComponent(seedStr)}`;
-    if (await copyText(invite)) {
+  const invitePop = document.getElementById('invite-pop');
+  const inIframe = window.self !== window.top;
+  function inviteLink() {
+    if (!inIframe) {
+      return `${location.origin}${location.pathname}?seed=${encodeURIComponent(seedStr)}`;
+    }
+    // Inside an embed the page URL is useless — point at the host page
+    // (document.referrer is the itch page on first load) and teach the code.
+    const page = /itch\.io/.test(document.referrer) ? document.referrer.split('?')[0] : '';
+    return `fly with me in akash — open ${page || 'the game'} and enter world code "${seedStr}" on the main menu`;
+  }
+  async function doCopy(text) {
+    invitePop.classList.remove('open');
+    if (await copyText(text)) {
       copyBtn.textContent = 'copied ✓';
       setTimeout(() => { copyBtn.textContent = 'invite'; }, 1600);
     } else {
@@ -100,7 +111,13 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
       worldEl.focus();
       worldEl.select();
     }
+  }
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    invitePop.classList.toggle('open');
   });
+  document.getElementById('btn-copy-link').addEventListener('click', () => doCopy(inviteLink()));
+  document.getElementById('btn-copy-code').addEventListener('click', () => doCopy(seedStr));
 
   // Buttons.
   document.getElementById('btn-fly').addEventListener('click', () => {
@@ -151,6 +168,10 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
   window.addEventListener('pointerdown', (e) => {
     if (!colorsEl.contains(e.target) && e.target !== swatchEl) {
       colorsEl.classList.remove('open');
+    }
+    const pop = document.getElementById('invite-pop');
+    if (!pop.contains(e.target) && e.target.id !== 'btn-world-copy') {
+      pop.classList.remove('open');
     }
   });
   for (const c of PILOT_COLORS) {
