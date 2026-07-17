@@ -314,6 +314,12 @@
       }
       .mw-pencil svg { width: 13px; height: 13px; display: block; }
       .mw-pencil:hover { color: #fff; transform: scale(1.12); }
+      /* While its field is being edited the pencil becomes the save/apply
+         action — a small green check. */
+      .mw-pencil .pc-check { display: none; }
+      .mw-pencil.editing .pc-pen { display: none; }
+      .mw-pencil.editing .pc-check { display: block; color: #c9f2a6; }
+      .mw-pencil.editing { transform: scale(1.15); }
       .mw-link {
         font: inherit;
         color: rgba(255, 255, 255, 0.8);
@@ -591,7 +597,7 @@
           <input id="pilot-name" maxlength="14" spellcheck="false" autocomplete="off"
             placeholder="name" aria-label="pilot name" />
           <button class="mw-pencil pp-pencil" data-edits="pilot-name" title="edit your name" aria-label="edit your name">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+            <svg class="pc-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><svg class="pc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
           </button>
           <div class="pilot-palette" id="pilot-colors" aria-label="drone color choices"></div>
         </div>
@@ -604,7 +610,7 @@
           <input id="world-code" spellcheck="false" autocomplete="off" maxlength="24"
             aria-label="world code" title="type any code and press enter to fly there" />
           <button class="mw-pencil" data-edits="world-code" title="type any code and press enter to fly there" aria-label="edit world code">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+            <svg class="pc-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><svg class="pc-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
           </button>
           <span class="mw-dot">&middot;</span>
           <button id="btn-world-reroll" class="mw-link" title="fly somewhere new">new</button>

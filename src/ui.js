@@ -191,15 +191,38 @@ export function createUI({ audio, seedStr, multiplayer, drone }) {
   }
   nameEl.addEventListener('change', commitPilot);
 
-  // Pencil: a visible "this is editable" affordance — drops the caret into
-  // the world-code field and selects it.
-  for (const pencil of document.querySelectorAll('.mw-pencil')) {
+  // Pencils: at rest they say "this is editable" and drop the caret in;
+  // while the field is focused they become the save/apply check, so no one
+  // has to know about Enter. pointerdown fires before the field's blur, so
+  // the apply sees the typed value before any revert-on-blur runs.
+  function wirePencil(pencil, input, apply) {
+    let justApplied = false;
+    input.addEventListener('focus', () => pencil.classList.add('editing'));
+    input.addEventListener('blur', () => pencil.classList.remove('editing'));
+    pencil.addEventListener('pointerdown', (e) => {
+      if (pencil.classList.contains('editing')) {
+        e.preventDefault();
+        justApplied = true;
+        apply();
+        input.blur();
+      }
+    });
     pencil.addEventListener('click', () => {
-      const input = document.getElementById(pencil.dataset.edits);
+      if (justApplied) { justApplied = false; return; }
       input.focus();
       input.select();
     });
   }
+  wirePencil(
+    document.querySelector('.mw-pencil[data-edits="world-code"]'),
+    worldEl,
+    () => applyWorld(worldEl.value),
+  );
+  wirePencil(
+    document.querySelector('.mw-pencil[data-edits="pilot-name"]'),
+    nameEl,
+    commitPilot,
+  );
 
   // Volume sliders — live while dragging, persisted by audio.setVolume.
   for (const input of document.querySelectorAll('#screen-settings input[type=range]')) {
