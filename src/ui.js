@@ -68,18 +68,36 @@ export function createUI({ audio, seedStr, multiplayer }) {
   // Invite: outside an iframe the full link carries the world; inside
   // itch.io's iframe the page URL is useless to a friend, so share the code
   // itself — they type it into this same field.
+  // itch's iframe blocks the async Clipboard API by permissions policy, so
+  // fall back to the legacy execCommand path (gesture-gated, not policy-gated).
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch { /* blocked or unsupported — try the legacy path */ }
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* nothing left to try */ }
+    ta.remove();
+    return ok;
+  }
   const copyBtn = document.getElementById('btn-world-copy');
   copyBtn.addEventListener('click', async () => {
     const inIframe = window.self !== window.top;
     const invite = inIframe
       ? seedStr
       : `${location.origin}${location.pathname}?seed=${encodeURIComponent(seedStr)}`;
-    try {
-      await navigator.clipboard.writeText(invite);
+    if (await copyText(invite)) {
       copyBtn.textContent = 'copied ✓';
       setTimeout(() => { copyBtn.textContent = 'invite'; }, 1600);
-    } catch {
-      // Clipboard denied — show the code so it can be copied by hand.
+    } else {
+      // Truly no clipboard — select the code so ⌘C works by hand.
+      worldEl.focus();
       worldEl.select();
     }
   });
