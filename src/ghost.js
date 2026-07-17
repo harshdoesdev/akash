@@ -1,17 +1,21 @@
 import * as THREE from 'three';
 import { buildDroneMesh } from './drone.js';
 
-// Ghost drone: a translucent spirit copy of the player's drone that replays
-// a recorded flight. Samples are a flat array [x, y, z, yaw, pitch, roll]
-// at GHOST_HZ — the same wire format a future multiplayer peer would feed,
-// so remote players later render through this exact component.
+// Ghost drone: a translucent spirit copy of the player's drone. Two riders
+// share it: race replays (createGhost) and live multiplayer peers
+// (multiplayer.js). Samples are a flat array [x, y, z, yaw, pitch, roll]
+// at GHOST_HZ — the replay recording and the multiplayer wire format are
+// the same thing, deliberately.
 export const GHOST_HZ = 10;
 export const GHOST_STRIDE = 6;
 
-export function createGhost(scene) {
+// A spirit-treated drone mesh: translucent, cool-tinted, no shadows, no
+// depth writes. setFade scales every material's opacity (0..1) so remote
+// players can drift in and out without popping.
+export function buildSpiritDrone(scene) {
   const { group, props, discs } = buildDroneMesh();
-  // Spirit treatment: translucent, cool-tinted, no shadows, no depth writes.
   const tint = new THREE.Color(0.84, 0.92, 1.0);
+  const mats = [];
   group.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = false;
@@ -21,10 +25,40 @@ export function createGhost(scene) {
     m.depthWrite = false;
     m.color.multiply(tint);
     o.material = m;
+    mats.push(m);
   });
   for (const disc of discs) disc.material.opacity = 0.16;
+  const baseOpacity = mats.map((m) => m.opacity);
   group.visible = false;
   scene.add(group);
+
+  return {
+    group,
+    setFade(f) {
+      for (let i = 0; i < mats.length; i++) mats[i].opacity = baseOpacity[i] * f;
+    },
+    setPose(x, y, z, yaw, pitch, roll) {
+      group.position.set(x, y, z);
+      // Same composition as Drone.update: yaw → pitch → roll.
+      group.rotation.set(0, 0, 0);
+      group.rotateY(yaw);
+      group.rotateX(-pitch);
+      group.rotateZ(-roll);
+    },
+    spinProps(dt) {
+      for (const [k, prop] of props.entries()) {
+        prop.rotation.y += (k % 2 ? 1 : -1) * 55 * dt;
+      }
+    },
+    dispose() {
+      scene.remove(group);
+    },
+  };
+}
+
+export function createGhost(scene) {
+  const spirit = buildSpiritDrone(scene);
+  const { group } = spirit;
 
   let data = null;
   let count = 0;
@@ -60,23 +94,16 @@ export function createGhost(scene) {
       const a = f - i;
       const s0 = i * GHOST_STRIDE;
       const s1 = s0 + GHOST_STRIDE;
-      group.position.set(
+      // Yaw is recorded unwrapped (it accumulates), so a plain lerp is correct.
+      spirit.setPose(
         data[s0] + (data[s1] - data[s0]) * a,
         data[s0 + 1] + (data[s1 + 1] - data[s0 + 1]) * a,
         data[s0 + 2] + (data[s1 + 2] - data[s0 + 2]) * a,
+        data[s0 + 3] + (data[s1 + 3] - data[s0 + 3]) * a,
+        data[s0 + 4] + (data[s1 + 4] - data[s0 + 4]) * a,
+        data[s0 + 5] + (data[s1 + 5] - data[s0 + 5]) * a,
       );
-      // Same composition as Drone.update: yaw → pitch → roll. Yaw is recorded
-      // unwrapped (it accumulates), so a plain lerp is correct.
-      const yaw = data[s0 + 3] + (data[s1 + 3] - data[s0 + 3]) * a;
-      const pitch = data[s0 + 4] + (data[s1 + 4] - data[s0 + 4]) * a;
-      const roll = data[s0 + 5] + (data[s1 + 5] - data[s0 + 5]) * a;
-      group.rotation.set(0, 0, 0);
-      group.rotateY(yaw);
-      group.rotateX(-pitch);
-      group.rotateZ(-roll);
-      for (const [k, prop] of props.entries()) {
-        prop.rotation.y += (k % 2 ? 1 : -1) * 55 * dt;
-      }
+      spirit.spinProps(dt);
     },
   };
   return api;

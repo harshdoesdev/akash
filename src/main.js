@@ -13,6 +13,7 @@ import { createDust } from './dust.js';
 import { createWindLeaves } from './windLeaves.js';
 import { createWindways } from './windways.js';
 import { createRace } from './race.js';
+import { createMultiplayer } from './multiplayer.js';
 import { hashSeed } from './rng.js';
 import { createGrass } from './grass.js';
 import { createSky } from './sky.js';
@@ -62,15 +63,16 @@ try {
 }
 document.getElementById('app').appendChild(renderer.domElement);
 
-// World seed: ?seed=... in the URL. No seed → roll one and pin it in the URL
-// so refresh keeps the world and sharing the link shares the world.
+// World code: ?seed= in the URL wins, then the last-flown code (itch.io's
+// iframe strips query params, so localStorage is what makes codes stick
+// there), then a fresh roll. Always pinned back into the URL so refresh
+// keeps the world and sharing the link shares the world.
 const params = new URLSearchParams(location.search);
-let seedStr = params.get('seed');
-if (!seedStr) {
-  seedStr = Math.random().toString(36).slice(2, 8);
-  params.set('seed', seedStr);
-  history.replaceState(null, '', `?${params}`);
-}
+let seedStr = params.get('seed') || localStorage.getItem('akash.world.v1');
+if (!seedStr) seedStr = Math.random().toString(36).slice(2, 8);
+localStorage.setItem('akash.world.v1', seedStr);
+params.set('seed', seedStr);
+history.replaceState(null, '', `?${params}`);
 const worldSeed = hashSeed(seedStr);
 initWorldGen(worldSeed);
 
@@ -89,7 +91,8 @@ const audio = createAudio();
 
 // Drone and camera treat the lake surface as ground — no diving.
 const surfaceAt = (x, z) => Math.max(terrain.heightAt(x, z), WATER_LEVEL);
-const drone = new Drone(scene, surfaceAt, world.colliders);
+const pilotColor = localStorage.getItem('akash.pilot.color');
+const drone = new Drone(scene, surfaceAt, world.colliders, pilotColor);
 const chaseCam = new ChaseCamera(camera, surfaceAt);
 const composer = createPostFX(renderer, scene, camera);
 const critters = createCritters(scene, terrain.heightAt, world.colliders, worldSeed);
@@ -106,7 +109,9 @@ const fireflies = createFireflies(scene, terrain.heightAt);
 const dust = createDust(scene, terrain.heightAt);
 const windLeaves = createWindLeaves(scene, terrain.heightAt, world.colliders, scene.fog);
 const windways = createWindways(scene, terrain.heightAt, worldSeed);
-const ui = createUI({ audio, seedStr });
+// Freeroam presence: everyone flying this world code shares a sky.
+const multiplayer = createMultiplayer(scene, seedStr, drone, () => ui.state === 'playing', camera);
+const ui = createUI({ audio, seedStr, multiplayer });
 const race = createRace(scene, windways.list, drone, seedStr);
 createTouchControls();
 window.drone = drone; // dev: live tuning/inspection from the console
@@ -116,8 +121,10 @@ window.critters = critters;
 window.sky = sky;
 window.windways = windways;
 window.race = race;
+window.multiplayer = multiplayer;
 
 const hud = document.getElementById('hud');
+const onlineEl = document.getElementById('menu-online');
 document.getElementById('controls').insertAdjacentText('beforeend', `  ·  world: ${seedStr}`);
 
 window.addEventListener('resize', () => {
@@ -198,6 +205,7 @@ renderer.setAnimationLoop(() => {
   drone.update(dt, input);
   windways.update(dt, time, drone, playing, camera.position);
   race.update(dt, time, playing, camera.position);
+  multiplayer.update(dt);
   if (ui.cameraMode === 'chase') chaseCam.update(dt, drone);
   else cinematicCamera(dt);
   grass.update(time, drone.position, drone.throttleVisual);
@@ -272,7 +280,14 @@ renderer.setAnimationLoop(() => {
     hudTimer = 0;
     const kmh = (drone.speed * 3.6).toFixed(0);
     const agl = drone.position.y - surfaceAt(drone.position.x, drone.position.z);
-    hud.textContent = `${kmh} km/h  ·  ${agl.toFixed(1)} m  ·  ${fpsValue} fps  ·  gpu ${gpuProbe.lag.toFixed(0)}ms`;
+    const others = multiplayer.count;
+    const pilots = others ? `  ·  ${others} pilot${others > 1 ? 's' : ''}` : '';
+    hud.textContent = `${kmh} km/h  ·  ${agl.toFixed(1)} m  ·  ${fpsValue} fps  ·  gpu ${gpuProbe.lag.toFixed(0)}ms${pilots}`;
+    if (onlineEl) {
+      onlineEl.textContent = others
+        ? `${others} pilot${others > 1 ? 's' : ''} flying this sky with you`
+        : '';
+    }
   }
 
   composer.render();

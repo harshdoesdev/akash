@@ -164,11 +164,52 @@
         background: rgba(255, 255, 255, 0.38);
         transform: translateY(-1px);
       }
-      .menu-seed {
+      /* World-code line: one whisper of text under the buttons, in the old
+         seed line's voice — the code itself is quietly editable (enter to
+         fly there), "new" and "invite" are bare text actions. */
+      .menu-world {
         margin-top: 26px;
+        display: flex;
+        gap: 7px;
+        justify-content: center;
+        align-items: baseline;
         font-size: 11px;
         letter-spacing: 0.24em;
         color: rgba(255, 255, 255, 0.7);
+      }
+      .menu-world input {
+        font: inherit;
+        color: rgba(255, 255, 255, 0.95);
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
+        background: none;
+        border: none;
+        border-bottom: 1px dotted rgba(255, 255, 255, 0.45);
+        padding: 0 2px 1px;
+        width: 8ch;
+        outline: none;
+        transition: border-color 0.15s ease;
+      }
+      .menu-world input:hover, .menu-world input:focus {
+        border-bottom-color: rgba(255, 255, 255, 0.9);
+      }
+      .mw-link {
+        font: inherit;
+        color: rgba(255, 255, 255, 0.7);
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        transition: color 0.15s ease;
+      }
+      .mw-link:hover { color: #fff; }
+      .mw-dot { color: rgba(255, 255, 255, 0.45); }
+      .menu-online {
+        margin-top: 10px;
+        min-height: 14px;
+        font-size: 11px;
+        letter-spacing: 0.2em;
+        color: rgba(255, 255, 255, 0.75);
       }
 
       /* Pause + settings share a glass card. */
@@ -192,6 +233,45 @@
         margin-bottom: 24px;
       }
       .panel-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+
+      /* Pilot identity: quiet underline input + a row of paint dots. */
+      .pilot-name {
+        font: inherit;
+        font-size: 13px;
+        letter-spacing: 0.12em;
+        text-align: center;
+        color: #fff;
+        text-shadow: 0 1px 6px rgba(20, 50, 90, 0.4);
+        background: none;
+        border: none;
+        border-bottom: 1px dotted rgba(255, 255, 255, 0.45);
+        padding: 2px 4px 3px;
+        width: 210px;
+        outline: none;
+        transition: border-color 0.15s ease;
+      }
+      .pilot-name:hover, .pilot-name:focus { border-bottom-color: rgba(255, 255, 255, 0.9); }
+      .pilot-name::placeholder { color: rgba(255, 255, 255, 0.55); }
+      .pilot-colors {
+        display: flex;
+        gap: 11px;
+        justify-content: center;
+        margin: 14px 0 24px;
+      }
+      .color-dot {
+        width: 19px;
+        height: 19px;
+        border-radius: 50%;
+        border: none;
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        cursor: pointer;
+        padding: 0;
+        box-shadow: 0 1px 5px rgba(20, 50, 90, 0.3);
+        transition: transform 0.15s ease, outline-color 0.15s ease;
+      }
+      .color-dot:hover { transform: scale(1.15); }
+      .color-dot.sel { outline-color: rgba(255, 255, 255, 0.95); }
 
       .slider-row {
         display: flex;
@@ -292,10 +372,13 @@
           width: 190px;
           font-size: 13px;
         }
-        .menu-seed { margin-top: 12px; font-size: 10px; }
+        .menu-world { margin-top: 12px; font-size: 10px; }
+        .menu-online { margin-top: 6px; font-size: 10px; }
         .alpha-pill { display: none; }
         .panel-card { padding: 16px 28px; min-width: 280px; }
         .panel-title { font-size: 15px; margin-bottom: 10px; }
+        .pilot-colors { margin: 8px 0 14px; gap: 9px; }
+        .pilot-name { font-size: 12px; width: 190px; }
         .slider-row { margin-bottom: 7px; font-size: 11px; }
         #boot-wordmark { width: min(220px, 34vw); }
       }
@@ -420,7 +503,15 @@
           <button id="btn-fly">fly</button>
           <button id="btn-settings">settings</button>
         </div>
-        <div class="menu-seed" id="menu-seed"></div>
+        <div class="menu-world">
+          <span>world</span>
+          <input id="world-code" spellcheck="false" autocomplete="off" maxlength="24"
+            aria-label="world code" title="type any code and press enter to fly there" />
+          <button id="btn-world-reroll" class="mw-link" title="fly somewhere new">new</button>
+          <span class="mw-dot">&middot;</span>
+          <button id="btn-world-copy" class="mw-link" title="copy an invite for a friend">invite</button>
+        </div>
+        <div class="menu-online" id="menu-online"></div>
       </div>
       <div class="alpha-pill">alpha build</div>
     </div>
@@ -443,6 +534,11 @@
       <div class="menu-shade"></div>
       <div class="panel-inner">
         <div class="panel-card">
+          <div class="panel-title">pilot</div>
+          <input id="pilot-name" class="pilot-name" maxlength="14" spellcheck="false"
+            autocomplete="off" placeholder="your name — shown to others"
+            aria-label="pilot name" />
+          <div class="pilot-colors" id="pilot-colors" aria-label="drone color"></div>
           <div class="panel-title">sound</div>
           <div class="slider-row"><label>master</label><input type="range" min="0" max="100" data-bus="master" /></div>
           <div class="slider-row"><label>drone</label><input type="range" min="0" max="100" data-bus="drone" /></div>

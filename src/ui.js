@@ -2,12 +2,18 @@
 // States: menu | playing | paused | settings. The world always renders —
 // the main menu's "art" is the game itself under a slow cinematic camera.
 import { isTouch, lockLandscape } from './touchControls.js';
+import { pushProfile } from './session.js';
 import {
   fullscreenSupported, fullscreenActive, enterFullscreen, exitFullscreen,
   onFullscreenChange,
 } from './fullscreen.js';
 
-export function createUI({ audio, seedStr }) {
+// Soft hand-paint pilot palette; the first entry is the stock cream body.
+export const PILOT_COLORS = [
+  '#f2ead8', '#8fd0ff', '#a8d977', '#f2a06b', '#b9a8e8', '#f2a0b4', '#f2d878',
+];
+
+export function createUI({ audio, seedStr, multiplayer }) {
   const screens = {};
   for (const el of document.querySelectorAll('.screen')) {
     screens[el.dataset.screen] = el;
@@ -35,9 +41,48 @@ export function createUI({ audio, seedStr }) {
     else show(state);
   }
 
-  // Seed line on the main menu.
-  const seedEl = document.getElementById('menu-seed');
-  if (seedEl) seedEl.textContent = `world: ${seedStr}`;
+  // World-code row: enter any code to fly (and share) that world. Applying
+  // a new code saves it and reloads — the world builds once at boot, and
+  // the boot screen covers the rebuild.
+  const worldEl = document.getElementById('world-code');
+  const fitWorldEl = () => {
+    worldEl.style.width = `${Math.max(4, worldEl.value.length || 4) + 1}ch`;
+  };
+  worldEl.value = seedStr;
+  fitWorldEl();
+  worldEl.addEventListener('input', fitWorldEl);
+  // Enter commits (below); wandering off just puts the current code back.
+  worldEl.addEventListener('blur', () => { worldEl.value = seedStr; fitWorldEl(); });
+  function applyWorld(code) {
+    code = code.trim();
+    if (!code) { worldEl.value = seedStr; return; }
+    if (code === seedStr) return;
+    localStorage.setItem('akash.world.v1', code);
+    const p = new URLSearchParams(location.search);
+    p.set('seed', code);
+    location.search = p.toString(); // navigates = reloads into the new world
+  }
+  document.getElementById('btn-world-reroll').addEventListener('click', () => {
+    applyWorld(Math.random().toString(36).slice(2, 8));
+  });
+  // Invite: outside an iframe the full link carries the world; inside
+  // itch.io's iframe the page URL is useless to a friend, so share the code
+  // itself — they type it into this same field.
+  const copyBtn = document.getElementById('btn-world-copy');
+  copyBtn.addEventListener('click', async () => {
+    const inIframe = window.self !== window.top;
+    const invite = inIframe
+      ? seedStr
+      : `${location.origin}${location.pathname}?seed=${encodeURIComponent(seedStr)}`;
+    try {
+      await navigator.clipboard.writeText(invite);
+      copyBtn.textContent = 'copied ✓';
+      setTimeout(() => { copyBtn.textContent = 'invite'; }, 1600);
+    } catch {
+      // Clipboard denied — show the code so it can be copied by hand.
+      worldEl.select();
+    }
+  });
 
   // Buttons.
   document.getElementById('btn-fly').addEventListener('click', () => {
@@ -57,6 +102,38 @@ export function createUI({ audio, seedStr }) {
   });
   document.getElementById('btn-main-menu').addEventListener('click', () => setState('menu'));
   document.getElementById('btn-settings-back').addEventListener('click', () => setState(settingsReturn));
+
+  // Pilot identity: name + drone color, saved locally for instant use and
+  // pushed to the pilot's server record (multiplayer reconnects to show it).
+  const nameEl = document.getElementById('pilot-name');
+  const colorsEl = document.getElementById('pilot-colors');
+  nameEl.value = localStorage.getItem('akash.pilot.name') || '';
+  let pilotColor = localStorage.getItem('akash.pilot.color') || PILOT_COLORS[0];
+  function commitPilot() {
+    const name = nameEl.value.trim().slice(0, 14);
+    localStorage.setItem('akash.pilot.name', name);
+    localStorage.setItem('akash.pilot.color', pilotColor);
+    pushProfile({ name, color: pilotColor })
+      .then((ok) => {
+        if (ok && multiplayer) multiplayer.refresh();
+        else if (!ok) console.warn('pilot profile: server rejected update');
+      })
+      .catch((err) => console.warn('pilot profile: offline?', err.message));
+  }
+  for (const c of PILOT_COLORS) {
+    const dot = document.createElement('button');
+    dot.className = 'color-dot';
+    dot.style.background = c;
+    dot.title = 'drone color';
+    dot.classList.toggle('sel', c === pilotColor);
+    dot.addEventListener('click', () => {
+      pilotColor = c;
+      for (const d of colorsEl.children) d.classList.toggle('sel', d === dot);
+      commitPilot();
+    });
+    colorsEl.appendChild(dot);
+  }
+  nameEl.addEventListener('change', commitPilot);
 
   // Volume sliders — live while dragging, persisted by audio.setVolume.
   for (const input of document.querySelectorAll('#screen-settings input[type=range]')) {
@@ -89,8 +166,17 @@ export function createUI({ audio, seedStr }) {
     });
   }
 
-  // ESC walks the state graph; F toggles fullscreen.
+  // ESC walks the state graph; F toggles fullscreen. Typing in a text field
+  // must not trigger either — Enter commits, ESC blurs.
   window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' && e.target.type !== 'range') {
+      if (e.code === 'Enter') {
+        if (e.target === worldEl) applyWorld(worldEl.value);
+        else e.target.blur(); // fires 'change' → commit
+      }
+      if (e.code === 'Escape') e.target.blur();
+      return;
+    }
     if (e.code === 'KeyF') { toggleFullscreen(); return; }
     if (e.code !== 'Escape') return;
     if (api.state === 'playing') setState('paused');

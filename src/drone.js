@@ -33,7 +33,7 @@ function toonGradient() {
   return tex;
 }
 
-export function buildDroneMesh() {
+export function buildDroneMesh({ bodyColor } = {}) {
   const group = new THREE.Group();
   const gradient = toonGradient();
   const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: gradient });
@@ -61,6 +61,10 @@ export function buildDroneMesh() {
     apply(dark, 0, 0);
     apply(gray, 0.5, 0);
   }
+
+  // Pilot color lands on the cream body panels: those texels are near-white,
+  // so a multiply tint keeps the hand-painted shading and reads true.
+  if (bodyColor) cream.color.set(bodyColor);
 
   const shadowed = (mesh) => {
     mesh.castShadow = true;
@@ -186,8 +190,8 @@ export function buildDroneMesh() {
 }
 
 export class Drone {
-  constructor(scene, heightAt = () => 0, colliders = []) {
-    const { group, props, discs } = buildDroneMesh();
+  constructor(scene, heightAt = () => 0, colliders = [], bodyColor = null) {
+    const { group, props, discs } = buildDroneMesh({ bodyColor });
     // Physics owns this.mesh; this.visual carries hover-bob/wobble on top.
     this.visual = group;
     this.mesh = new THREE.Group();

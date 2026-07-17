@@ -1,0 +1,13 @@
+{
+  "name": "akash-relay",
+  "private": true,
+  "version": "0.3.0",
+  "description": "WebSocket room relay + anonymous auth for akash multiplayer",
+  "main": "server.js",
+  "dependencies": {
+    "better-auth": "^1.3.0",
+    "better-sqlite3": "^12.2.0",
+    "drizzle-orm": "^0.45.2",
+    "ws": "^8.18.0"
+  }
+}
